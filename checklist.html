@@ -964,6 +964,26 @@ const DATA = {"rating_levels": [{"en": "Does not meet quality requirements", "vn
       }
     });
   }
+  function diffFeedbackMemory(oldFb, newFb, lines){
+    oldFb = oldFb || {}; newFb = newFb || {};
+    var keys = {};
+    Object.keys(oldFb).forEach(function(k){ keys[k] = 1; });
+    Object.keys(newFb).forEach(function(k){ keys[k] = 1; });
+    Object.keys(keys).forEach(function(k){
+      var ov = oldFb[k], nv = newFb[k];
+      if(ov === nv) return;
+      var sep = k.indexOf('|');
+      var label = (sep > -1 ? k.slice(sep+1) : k);
+      if(label.length > 55) label = label.slice(0,55) + '…';
+      if(ov === undefined){
+        lines.push({icon: nv === 'dislike' ? '👎' : '👍', text: 'Bộ nhớ phản hồi — thêm mục mới: "' + label + '" (' + (nv==='dislike'?'Dislike':'Like') + ')'});
+      } else if(nv === undefined){
+        lines.push({icon: '🗑', text: 'Bộ nhớ phản hồi — đã xoá mục: "' + label + '"'});
+      } else {
+        lines.push({icon: '✏️', text: 'Bộ nhớ phản hồi — đổi từ ' + (ov==='dislike'?'Dislike':'Like') + ' sang ' + (nv==='dislike'?'Dislike':'Like') + ': "' + label + '"'});
+      }
+    });
+  }
   function diffPayloads(oldP, newP){
     oldP = oldP || {}; newP = newP || {};
     var lines = [];
@@ -971,6 +991,7 @@ const DATA = {"rating_levels": [{"en": "Does not meet quality requirements", "vn
     diffBoolMapGeneric(oldP.appxProgress, newP.appxProgress, lines, appxLabel);
     diffCritNotes(oldP.notes, newP.notes, lines);
     diffAppxNotes(oldP.appxNotes, newP.appxNotes, lines);
+    diffFeedbackMemory(oldP.checkerFeedback, newP.checkerFeedback, lines);
     return lines;
   }
 
@@ -1751,7 +1772,8 @@ state.checker = {
   filter: 'all',      // 'all'|'spelling'|'grammar'|'style'|'fibaa'
   mode: 'file',       // 'file'|'paste'
   feedback: {},       // fingerprint → 'like'|'dislike'  (persisted offline)
-  feedbackLoaded: false
+  feedbackLoaded: false,
+  fbListOpen: false
 };
 
 /* ---------- feedback persistence ---------- */
@@ -2364,6 +2386,48 @@ function checkerSummary(){
   return counts;
 }
 
+function renderFeedbackMemoryList(){
+  var fb = state.checker.feedback || {};
+  var keys = Object.keys(fb);
+  var html = '<div id="fbMemListBox" style="border:1px solid var(--line);border-radius:9px;margin-bottom:14px;background:var(--card);overflow:hidden;">';
+  if(!keys.length){
+    html += '<div style="padding:14px;font-size:12.5px;color:var(--muted);">Chưa có mục nào trong bộ nhớ phản hồi. · No entries in feedback memory yet.</div>';
+  } else {
+    keys.forEach(function(fp){
+      var vote = fb[fp];
+      var sep = fp.indexOf('|');
+      var type = sep>-1 ? fp.slice(0,sep) : '';
+      var text = sep>-1 ? fp.slice(sep+1) : fp;
+      var typeLabel = (TYPE_META[type] && TYPE_META[type].label_vn) || type || '—';
+      html += '<div class="fb-mem-row" data-fp="'+esc(fp)+'" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:12.5px;">';
+      html += '<span style="flex:0 0 auto;font-size:11px;color:var(--faint);min-width:90px;">'+esc(typeLabel)+'</span>';
+      html += '<span style="flex:1;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+esc(text)+'">'+esc(text)+'</span>';
+      html += '<select class="fb-mem-vote-select" data-fp="'+esc(fp)+'" style="font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;">';
+      html += '<option value="dislike"'+(vote==='dislike'?' selected':'')+'>👎 Dislike</option>';
+      html += '<option value="like"'+(vote==='like'?' selected':'')+'>👍 Like</option>';
+      html += '</select>';
+      html += '<button type="button" class="fb-mem-del" data-fp="'+esc(fp)+'" style="font-size:12px;padding:4px 8px;border:1px solid var(--line);background:none;border-radius:6px;cursor:pointer;color:var(--red);">🗑</button>';
+      html += '</div>';
+    });
+  }
+  /* Add new entry row */
+  html += '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;background:var(--bg-deep);">';
+  html += '<select id="fbAddType" style="font-size:12px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;">';
+  html += '<option value="spelling_grammar">Chính tả & Ngữ pháp</option>';
+  html += '<option value="style">Văn phong</option>';
+  html += '<option value="fibaa">Chuẩn FIBAA</option>';
+  html += '</select>';
+  html += '<input id="fbAddText" type="text" placeholder="Đoạn mẫu lỗi (vd: một phần nội dung issue) · pattern text" style="flex:1;min-width:160px;font-size:12.5px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;">';
+  html += '<select id="fbAddVote" style="font-size:12px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;">';
+  html += '<option value="dislike">👎 Dislike</option>';
+  html += '<option value="like">👍 Like</option>';
+  html += '</select>';
+  html += '<button type="button" id="fbAddBtn" class="pill-btn pill-btn-primary" style="font-size:12px;padding:5px 12px;">+ Thêm · Add</button>';
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
 function renderCheckerView(){
   var html = '<section class="view active" id="view-analysis">';
   html += '<h2 style="font-family:var(--serif);font-size:22px;color:var(--navy-deep);margin:0 0 6px;">';
@@ -2394,11 +2458,17 @@ function renderCheckerView(){
   html += '<label class="pill-btn" style="font-size:12px;padding:5px 10px;cursor:pointer;margin:0;" title="Tải lên file bộ nhớ từ lần trước · Load saved feedback memory file">';
   html += '<span class="i18n-en">⬆ Import memory</span><span class="i18n-vn">⬆ Tải lên bộ nhớ</span>';
   html += '<input type="file" id="chImportFbInput" accept=".json" style="display:none;"></label>';
+  html += '<button type="button" class="pill-btn" id="chToggleFbListBtn" style="font-size:12px;padding:5px 10px;">';
+  html += (state.checker.fbListOpen ? '<span class="i18n-en">▲ Hide list</span><span class="i18n-vn">▲ Ẩn danh sách</span>' : '<span class="i18n-en">▾ Manage entries</span><span class="i18n-vn">▾ Quản lý từng mục</span>');
+  html += '</button>';
   if(dislikeCount > 0){
     html += '<button type="button" class="pill-btn" id="chResetFbBtn" style="font-size:12px;padding:5px 10px;">';
     html += '<span class="i18n-en">🗑 Reset</span><span class="i18n-vn">🗑 Xoá bộ nhớ</span></button>';
   }
   html += '</div>';
+  if(state.checker.fbListOpen){
+    html += renderFeedbackMemoryList();
+  }
   if(dislikeCount > 0){ /* dummy block to keep JS structure consistent */ }
 
   /* Mode tabs */
@@ -3119,6 +3189,34 @@ function bindCheckerEvents(root){
       showToast('Đã xoá bộ nhớ phản hồi · Feedback memory cleared');
       renderAll();
     }
+    if(e2.target.closest('#chToggleFbListBtn')){
+      state.checker.fbListOpen = !state.checker.fbListOpen;
+      renderAll();
+    }
+    /* Delete single feedback memory entry */
+    var delBtn = e2.target.closest('.fb-mem-del');
+    if(delBtn){
+      var fpDel = delBtn.getAttribute('data-fp');
+      if(fpDel && state.checker.feedback[fpDel] !== undefined){
+        delete state.checker.feedback[fpDel];
+        saveFeedback();
+        showToast('Đã xoá 1 mục trong bộ nhớ phản hồi · Entry removed');
+        renderAll();
+      }
+    }
+    /* Add new custom feedback memory entry */
+    if(e2.target.closest('#fbAddBtn')){
+      var typeSel = document.getElementById('fbAddType');
+      var textInp = document.getElementById('fbAddText');
+      var voteSel = document.getElementById('fbAddVote');
+      var txt = (textInp && textInp.value || '').trim();
+      if(!txt){ showToast('Vui lòng nhập đoạn mẫu lỗi · Please enter a pattern text'); return; }
+      var newFp = (typeSel ? typeSel.value : 'style') + '|' + txt.slice(0,60);
+      state.checker.feedback[newFp] = voteSel ? voteSel.value : 'dislike';
+      saveFeedback();
+      showToast('Đã thêm mục mới vào bộ nhớ phản hồi · Entry added');
+      renderAll();
+    }
     /* Export feedback memory */
     if(e2.target.closest('#chExportFbBtn')){
       var fbData = JSON.stringify({
@@ -3133,6 +3231,19 @@ function bindCheckerEvents(root){
       a.download = 'fibaa_feedback_memory_'+new Date().toISOString().slice(0,10)+'.json';
       document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
       showToast('Đã xuất bộ nhớ phản hồi · Feedback memory exported');
+    }
+  });
+
+  /* Change vote (like/dislike) of an existing feedback memory entry */
+  view.addEventListener('change', function(eSel){
+    var sel = eSel.target.closest('.fb-mem-vote-select');
+    if(sel){
+      var fpSel = sel.getAttribute('data-fp');
+      if(fpSel){
+        state.checker.feedback[fpSel] = sel.value;
+        saveFeedback();
+        showToast('Đã cập nhật mục trong bộ nhớ phản hồi · Entry updated');
+      }
     }
   });
 
