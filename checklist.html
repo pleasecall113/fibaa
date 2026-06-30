@@ -2508,18 +2508,11 @@ function renderCheckerView(){
   if(state.checker.issues&&state.checker.issues.length){
     html += renderCheckerResults();
   } else if(state.checker.ran){
-    /* Show format check panel even when no writing issues */
-    if((state.checker.fmtIssues||[]).length){
-      html += renderFormatPanel();
-    }
     html += '<div class="an-upload" style="margin-top:16px;background:var(--green-bg);border-color:#BFE0CC;">';
     html += '<div style="font-size:22px;">✅</div>';
     html += '<div style="font-size:14px;color:var(--green);font-weight:700;margin-top:6px;">';
     html += '<span class="i18n-en">No issues detected in this text sample.</span>';
     html += '<span class="i18n-vn">Không phát hiện lỗi nào trong đoạn văn này.</span></div></div>';
-  } else if((state.checker.fmtIssues||[]).length && state.checker.doc){
-    /* File loaded, not yet run — show format result immediately */
-    html += renderFormatPanel();
   }
 
   html += '</section>';
@@ -2794,7 +2787,7 @@ function checkDocxFormat(file){
         }
 
         var zipFiles = findZipFiles(uint8);
-        var targets = ['word/document.xml','word/styles.xml'];
+        var targets = ['word/document.xml','word/styles.xml','docProps/app.xml'];
         var xmlMap = {};
 
         function loadNext(idx){
@@ -2822,10 +2815,74 @@ function checkDocxFormat(file){
           /* ── 1. Check line spacing in document.xml ── */
           var docXml = xmlMap['word/document.xml'] || '';
           var stylesXml = xmlMap['word/styles.xml'] || '';
+          var appXml = xmlMap['docProps/app.xml'] || '';
           var TARGET_LINE = 276;        /* 1.15 × 240 = 276 twips */
           var LINE_TOLERANCE = 20;      /* ±20 twips allowed */
           var TARGET_SIZE = 22;         /* 11pt = 22 half-pts */
           var SIZE_TOLERANCE = 2;       /* ±1pt */
+
+          /* Total page count, if Word recorded it in docProps/app.xml, used only
+             to give a rough "trang ~N/M" estimate for long stretches of bad format. */
+          var totalPages = 0;
+          var pagesM = appXml.match(/<Pages>(\d+)<\/Pages>/);
+          if(pagesM) totalPages = parseInt(pagesM[1],10);
+
+          function decodeXmlEntities(s){
+            return (s||'').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+              .replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
+          }
+
+          /* --- Split document body into paragraphs, keeping each paragraph's own
+             XML chunk, its plain text, and its running character offset. This lets us
+             point to WHERE in the document a font/size/spacing problem actually is,
+             instead of only reporting it exists somewhere in the file. --- */
+          var paragraphs = [];
+          var paraRe = /<w:p\b[\s\S]*?<\/w:p>/g;
+          var pm0, runningChars = 0;
+          while((pm0 = paraRe.exec(docXml)) !== null){
+            var pxml = pm0[0];
+            var ptext = '';
+            var twRe = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g, twm;
+            while((twm = twRe.exec(pxml)) !== null){ ptext += twm[1]; }
+            ptext = decodeXmlEntities(ptext);
+            paragraphs.push({ xml: pxml, text: ptext, startChars: runningChars });
+            runningChars += ptext.length;
+          }
+          var totalChars = runningChars || 1;
+
+          function pageOf(p){
+            if(!totalPages) return null;
+            var mid = p.startChars + p.text.length/2;
+            return Math.min(totalPages, Math.max(1, Math.round((mid/totalChars)*totalPages)));
+          }
+
+          /* Build a short, searchable location label for a paragraph:
+             - short paragraph → quote it (ellipsis in the middle if long, per request)
+             - long paragraph (effectively a whole page of text) → report page number
+               instead of dumping a huge quote */
+          function locationLabel(p){
+            var t = p.text.trim();
+            var pg = pageOf(p);
+            if(!t){
+              return pg ? ('trang ~' + pg + (totalPages?'/'+totalPages:'')) : 'một đoạn trống';
+            }
+            if(t.length <= 140){
+              var disp = t.length > 90 ? (t.slice(0,55) + ' … ' + t.slice(-25)) : t;
+              return '"' + disp + '"' + (pg ? ' (trang ~'+pg+(totalPages?'/'+totalPages:'')+')' : '');
+            }
+            /* Long paragraph ≈ fills most of a page — point to the page instead */
+            return pg ? ('cả đoạn dài ở trang ~'+pg+(totalPages?'/'+totalPages:'')+' (xem "'+t.slice(0,40)+' …")')
+                       : ('đoạn dài bắt đầu bằng "'+t.slice(0,40)+' …"');
+          }
+
+          function buildLocationList(matchedParagraphs){
+            var labels = matchedParagraphs.map(locationLabel);
+            var shown = labels.slice(0,6);
+            var extra = labels.length - shown.length;
+            var out = shown.join('; ');
+            if(extra > 0) out += '; và ' + extra + ' vị trí khác';
+            return out;
+          }
 
           /* --- Line spacing check ---
              In OOXML, line spacing is stored in a self-closing <w:spacing .../> tag
@@ -2858,10 +2915,17 @@ function checkDocxFormat(file){
               var badLineDescriptions = badLines.map(function(v){
                 return (v/240).toFixed(2) + 'x (' + v + ' twips)';
               }).join(', ');
+              /* Find which paragraphs actually carry one of the bad line values */
+              var badLineParas = paragraphs.filter(function(p){
+                var pv = {};
+                collectLineVals(p.xml, pv);
+                return Object.keys(pv).some(function(k){ return badLines.indexOf(parseInt(k,10)) !== -1; });
+              });
+              var lineLocText = badLineParas.length ? (' Vị trí: ' + buildLocationList(badLineParas) + '.') : '';
               issues.push({
                 type:'format', severity:'warning',
                 sentence:'[Kiểm tra định dạng — Line Spacing]',
-                issue_vn:'Giãn dòng không đúng chuẩn: phát hiện giá trị ' + badLineDescriptions + '. Yêu cầu: 1.15 (276 twips).',
+                issue_vn:'Giãn dòng không đúng chuẩn: phát hiện giá trị ' + badLineDescriptions + '. Yêu cầu: 1.15 (276 twips).' + lineLocText,
                 suggestion_vn:'Chọn toàn bộ văn bản (Ctrl+A), vào Format → Paragraph → Line Spacing, đặt về "Multiple" = 1.15.',
                 excerpt:'[line-spacing: ' + badLines.map(function(v){return (v/240).toFixed(2)+'x';}).join(', ') + ']'
               });
@@ -2921,24 +2985,36 @@ function checkDocxFormat(file){
             return f.toLowerCase() === 'arial';
           });
 
+          function paragraphsWithFonts(fontList){
+            return paragraphs.filter(function(p){
+              var pf = {};
+              collectFonts(p.xml, pf);
+              return Object.keys(pf).some(function(k){ return fontList.indexOf(k) !== -1; });
+            });
+          }
+
           if(hasFontInfo){
-            if(nonArial.length > 0 && !arialPresent){
-              issues.push({
-                type:'format', severity:'warning',
-                sentence:'[Kiểm tra định dạng — Font]',
-                issue_vn:'Font chữ không đúng chuẩn. Phát hiện: ' + nonArial.slice(0,4).join(', ') + '. Yêu cầu: Arial 11pt.',
-                suggestion_vn:'Chọn toàn bộ văn bản (Ctrl+A), đổi font về Arial, cỡ chữ 11.',
-                excerpt:'[font: ' + nonArial.slice(0,3).join(', ') + ']'
-              });
-            } else if(nonArial.length > 0){
-              /* Mixed fonts: some Arial, some not — e.g. one short paragraph changed */
-              issues.push({
-                type:'format', severity:'warning',
-                sentence:'[Kiểm tra định dạng — Font]',
-                issue_vn:'Tài liệu có sử dụng cả Arial và một số font khác: ' + nonArial.slice(0,4).join(', ') + '. Toàn bộ văn bản cần dùng Arial 11.',
-                suggestion_vn:'Kiểm tra các đoạn dùng font khác Arial (có thể chỉ là một đoạn ngắn) và đổi về Arial 11.',
-                excerpt:'[font: mixed — ' + nonArial.slice(0,2).join(', ') + ']'
-              });
+            if(nonArial.length > 0){
+              var fontParas = paragraphsWithFonts(nonArial);
+              var fontLocText = fontParas.length ? (' Vị trí: ' + buildLocationList(fontParas) + '.') : ' (Áp dụng cho toàn bộ văn bản — không xác định được đoạn cụ thể, có thể là font mặc định.)';
+              if(!arialPresent){
+                issues.push({
+                  type:'format', severity:'warning',
+                  sentence:'[Kiểm tra định dạng — Font]',
+                  issue_vn:'Font chữ không đúng chuẩn. Phát hiện: ' + nonArial.slice(0,4).join(', ') + '. Yêu cầu: Arial 11pt.' + fontLocText,
+                  suggestion_vn:'Chọn toàn bộ văn bản (Ctrl+A), đổi font về Arial, cỡ chữ 11.',
+                  excerpt:'[font: ' + nonArial.slice(0,3).join(', ') + ']'
+                });
+              } else {
+                /* Mixed fonts: some Arial, some not — e.g. one short paragraph changed */
+                issues.push({
+                  type:'format', severity:'warning',
+                  sentence:'[Kiểm tra định dạng — Font]',
+                  issue_vn:'Tài liệu có sử dụng cả Arial và một số font khác: ' + nonArial.slice(0,4).join(', ') + '. Toàn bộ văn bản cần dùng Arial 11.' + fontLocText,
+                  suggestion_vn:'Kiểm tra các đoạn dùng font khác Arial (có thể chỉ là một đoạn ngắn) và đổi về Arial 11.',
+                  excerpt:'[font: mixed — ' + nonArial.slice(0,2).join(', ') + ']'
+                });
+              }
             } else {
               issues.push({
                 type:'format', severity:'ok',
@@ -2983,10 +3059,16 @@ function checkDocxFormat(file){
             /* Ignore heading sizes (anything >= 28 half-pts = 14pt) */
             badSizes = badSizes.filter(function(v){ return v < 28; });
             if(badSizes.length > 0){
+              var sizeParas = paragraphs.filter(function(p){
+                var ps = {};
+                collectSizes(p.xml, ps);
+                return Object.keys(ps).some(function(k){ return badSizes.indexOf(parseInt(k,10)) !== -1; });
+              });
+              var sizeLocText = sizeParas.length ? (' Vị trí: ' + buildLocationList(sizeParas) + '.') : ' (Áp dụng cho toàn bộ văn bản — không xác định được đoạn cụ thể, có thể là cỡ chữ mặc định.)';
               issues.push({
                 type:'format', severity:'warning',
                 sentence:'[Kiểm tra định dạng — Font Size]',
-                issue_vn:'Cỡ chữ thân bài không đúng chuẩn: phát hiện ' + badSizes.map(function(v){return (v/2)+'pt';}).join(', ') + '. Yêu cầu: 11pt (22 half-pts).',
+                issue_vn:'Cỡ chữ thân bài không đúng chuẩn: phát hiện ' + badSizes.map(function(v){return (v/2)+'pt';}).join(', ') + '. Yêu cầu: 11pt (22 half-pts).' + sizeLocText,
                 suggestion_vn:'Chọn toàn bộ văn bản thân bài, đổi cỡ chữ về 11.',
                 excerpt:'[font-size: ' + badSizes.map(function(v){return (v/2)+'pt';}).join(', ') + ']'
               });
