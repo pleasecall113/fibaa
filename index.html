@@ -606,6 +606,70 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
     }).then(function(r){ return r.ok ? r.text() : null; });
   }
 
+  function shortTaskDesc(taskId){
+    var t = DATA.tasks.filter(function(x){ return x.id === taskId; })[0];
+    if(!t) return taskId;
+    var d = L(t.desc_vn, t.desc_en);
+    if(d.length > 55) d = d.slice(0, 55) + '…';
+    return taskId + ' – ' + d;
+  }
+
+  function diffBoolMap(oldMap, newMap, lines, isPerProgram){
+    oldMap = oldMap || {}; newMap = newMap || {};
+    var keys = {};
+    Object.keys(oldMap).forEach(function(k){ keys[k] = 1; });
+    Object.keys(newMap).forEach(function(k){ keys[k] = 1; });
+    Object.keys(keys).forEach(function(k){
+      var ov = !!oldMap[k], nv = !!newMap[k];
+      if(ov === nv) return;
+      var label;
+      if(isPerProgram){
+        var parts = k.split('_');
+        var prog = programInfo(parts[1]);
+        label = shortTaskDesc(parts[0]) + (prog ? ' · ' + L(prog.name_vn, prog.name_en) : '');
+      } else {
+        label = shortTaskDesc(k);
+      }
+      lines.push({icon: nv ? '✅' : '↩', text: label + (nv ? L(' — đã đánh dấu hoàn thành',' — marked as done') : L(' — bỏ đánh dấu hoàn thành',' — unmarked'))});
+    });
+  }
+
+  function diffNotes(oldNotes, newNotes, lines){
+    oldNotes = oldNotes || {}; newNotes = newNotes || {};
+    var keys = {};
+    Object.keys(oldNotes).forEach(function(k){ keys[k] = 1; });
+    Object.keys(newNotes).forEach(function(k){ keys[k] = 1; });
+    Object.keys(keys).forEach(function(k){
+      var oldArr = oldNotes[k] || [], newArr = newNotes[k] || [];
+      if(newArr.length > oldArr.length){
+        newArr.slice(oldArr.length).forEach(function(n){
+          var txt = (n.text || '').slice(0, 60);
+          lines.push({icon: '📝', text: shortTaskDesc(k) + L(' — ghi chú mới: ', ' — new note: ') + '"' + txt + ((n.text||'').length > 60 ? '…' : '') + '"'});
+        });
+      } else if(newArr.length < oldArr.length){
+        lines.push({icon: '🗑', text: shortTaskDesc(k) + L(' — đã xóa một ghi chú',' — a note was deleted')});
+      }
+    });
+  }
+
+  function diffPayloads(oldP, newP){
+    oldP = oldP || {}; newP = newP || {};
+    var lines = [];
+    diffBoolMap(oldP.progress, newP.progress, lines, false);
+    diffBoolMap(oldP.progProgress, newP.progProgress, lines, true);
+    diffNotes(oldP.notes, newP.notes, lines);
+    return lines;
+  }
+
+  var revisionContentCache = {};
+  function getRevisionPayload(revisionId){
+    if(revisionContentCache[revisionId]) return Promise.resolve(revisionContentCache[revisionId]);
+    return driveDownloadRevision(revisionId).then(function(text){
+      try{ var p = JSON.parse(text); revisionContentCache[revisionId] = p; return p; }
+      catch(e){ return null; }
+    });
+  }
+
   function fmtDateTimeVN(iso){
     var d = new Date(iso);
     return d.toLocaleString(state.lang === 'en' ? 'en-US' : 'vi-VN', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'});
@@ -625,16 +689,71 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
         return;
       }
       listEl.innerHTML = '';
+      revisionContentCache = {}; // làm mới bộ nhớ tạm mỗi lần mở danh sách
       revisions.forEach(function(rev, idx){
+        var wrap = document.createElement('div');
+
         var row = document.createElement('div');
         row.className = 'history-item';
         var label = document.createElement('div');
         label.innerHTML = '<div class="history-item-time">' + fmtDateTimeVN(rev.modifiedTime) + '</div>' +
           (idx === 0 ? '<div class="history-item-current">' + L('Phiên bản mới nhất','Latest version') + '</div>' : '');
-        var btn = document.createElement('button');
-        btn.className = 'history-restore-btn';
-        btn.textContent = L('Khôi phục','Restore');
-        btn.addEventListener('click', function(){
+
+        var btnGroup = document.createElement('div');
+        btnGroup.style.display = 'flex';
+        btnGroup.style.gap = '6px';
+
+        var diffBtn = document.createElement('button');
+        diffBtn.className = 'history-restore-btn';
+        diffBtn.style.background = 'none';
+        diffBtn.style.color = 'var(--slate)';
+        diffBtn.style.border = '1px solid var(--line)';
+        diffBtn.textContent = L('Xem thay đổi','Show changes');
+
+        var diffBox = document.createElement('div');
+        diffBox.style.display = 'none';
+        diffBox.style.padding = '4px 14px 12px';
+        diffBox.style.fontFamily = 'var(--sans)';
+        diffBox.style.fontSize = '12px';
+        diffBox.style.color = 'var(--muted)';
+        diffBox.style.lineHeight = '1.6';
+        diffBox.style.borderBottom = '1px solid var(--line)';
+        diffBox.style.background = 'var(--bg-deep)';
+
+        if(idx === revisions.length - 1){
+          diffBtn.disabled = true;
+          diffBtn.style.opacity = '0.45';
+          diffBtn.title = L('Đây là phiên bản đầu tiên được ghi nhận','This is the first recorded version');
+        } else {
+          diffBtn.addEventListener('click', function(){
+            var isOpen = diffBox.style.display !== 'none';
+            if(isOpen){ diffBox.style.display = 'none'; diffBtn.textContent = L('Xem thay đổi','Show changes'); return; }
+            diffBtn.textContent = L('Đang tải…','Loading…');
+            var olderRev = revisions[idx + 1];
+            Promise.all([getRevisionPayload(rev.id), getRevisionPayload(olderRev.id)]).then(function(arr){
+              var newP = arr[0], oldP = arr[1];
+              diffBtn.textContent = L('Ẩn thay đổi','Hide changes');
+              diffBox.style.display = 'block';
+              if(!newP || !oldP){
+                diffBox.innerHTML = L('Không tải được nội dung để so sánh.','Could not load content to compare.');
+                return;
+              }
+              var diffLines = diffPayloads(oldP, newP);
+              if(!diffLines.length){
+                diffBox.innerHTML = L('Không có thay đổi nào so với phiên bản trước.','No changes compared to the previous version.');
+                return;
+              }
+              diffBox.innerHTML = diffLines.map(function(d){
+                return '<div style="margin-bottom:4px;">' + d.icon + ' ' + esc(d.text) + '</div>';
+              }).join('');
+            });
+          });
+        }
+
+        var restoreBtn = document.createElement('button');
+        restoreBtn.className = 'history-restore-btn';
+        restoreBtn.textContent = L('Khôi phục','Restore');
+        restoreBtn.addEventListener('click', function(){
           if(!confirm(L('Khôi phục về thời điểm ' + fmtDateTimeVN(rev.modifiedTime) + '? Tiến độ hiện tại sẽ bị thay thế (nhưng vẫn còn trong lịch sử phiên bản).',
                         'Restore to ' + fmtDateTimeVN(rev.modifiedTime) + '? Current progress will be replaced (but stays in version history).'))) return;
           driveDownloadRevision(rev.id).then(function(text){
@@ -651,9 +770,14 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
             }catch(e){ showToast(L('File phiên bản không hợp lệ','Invalid version file')); }
           });
         });
+
+        btnGroup.appendChild(diffBtn);
+        btnGroup.appendChild(restoreBtn);
         row.appendChild(label);
-        row.appendChild(btn);
-        listEl.appendChild(row);
+        row.appendChild(btnGroup);
+        wrap.appendChild(row);
+        wrap.appendChild(diffBox);
+        listEl.appendChild(wrap);
       });
     });
   }
