@@ -356,7 +356,7 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
      3. Địa chỉ host đó phải được khai báo trong "Authorized JavaScript origins"
         của OAuth Client ID.
   ======================================================= */
-  var GOOGLE_CLIENT_ID = '79443904322-cdulfaot22u2a5q8clmpqcdaaa3g1s0i.apps.googleusercontent.com'; // <-- THAY Ở ĐÂY
+  var GOOGLE_CLIENT_ID = '79443904322-cdulfaot22u2a5q8clmpqcdaaa3g1s0i.apps.googleusercontent.com';
   var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   var DRIVE_FILE_NAME = 'fibaa_tracker_progress.json';
 
@@ -408,8 +408,10 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
     drive.tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: DRIVE_SCOPE,
-      prompt: '',
+      prompt: 'consent',
       callback: function(resp){
+        clearTimeout(drive.silentTimeoutTimer);
+        drive.silentAttemptInFlight = false;
         if(resp.error){
           driveSetStatus(L('☁ Đăng nhập thất bại, thử lại','☁ Sign-in failed, try again'), 'is-error');
           return;
@@ -418,15 +420,30 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
         afterDriveSignIn();
       }
     });
-    // Thử đăng nhập âm thầm nếu trước đó đã từng đồng ý (không hiện popup nếu trình duyệt cho phép)
+    // Thử đăng nhập ngầm nếu trình duyệt đang đăng nhập sẵn 1 tài khoản Google đã từng
+    // cho phép truy cập trước đó. Có đồng hồ an toàn: nếu sau 4 giây không có phản hồi
+    // (ví dụ bị trình duyệt chặn iframe/cookie bên thứ ba), tự hủy và trả về trạng thái
+    // bấm tay bình thường để nút không bao giờ bị "đơ".
     if(localStorage.getItem('fibaa_drive_was_signed_in') === '1'){
-      try{ drive.tokenClient.requestAccessToken({prompt: ''}); }catch(e){}
+      driveSetStatus(L('☁ Đang thử tự đồng bộ…','☁ Trying auto-sync…'));
+      drive.silentAttemptInFlight = true;
+      drive.silentTimeoutTimer = setTimeout(function(){
+        if(drive.silentAttemptInFlight){
+          drive.silentAttemptInFlight = false;
+          driveSetStatus(L('☁ Bấm "Đăng nhập Google" để đồng bộ','☁ Click "Sign in" to sync'));
+        }
+      }, 4000);
+      try{
+        drive.tokenClient.requestAccessToken({prompt: '', hint: localStorage.getItem('fibaa_drive_last_email') || undefined});
+      }catch(e){
+        clearTimeout(drive.silentTimeoutTimer);
+        drive.silentAttemptInFlight = false;
+      }
     }
   }
 
   function afterDriveSignIn(){
-    localStorage.setItem('fibaa_drive_was_signed_in', '1');
-    drive.ready = true;
+    localStorage.setItem('fibaa_drive_was_signed_in', '1');    drive.ready = true;
     document.getElementById('btnDriveSignIn').style.display = 'none';
     document.getElementById('btnDriveSignOut').style.display = '';
     driveSetStatus(L('☁ Đang kết nối Drive…','☁ Connecting to Drive…'));
@@ -434,6 +451,7 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
       .then(function(r){ return r.json(); })
       .then(function(info){
         drive.email = info.email || null;
+        if(drive.email) localStorage.setItem('fibaa_drive_last_email', drive.email);
         driveLoadFromDrive(true);
       })
       .catch(function(){ driveLoadFromDrive(true); });
@@ -544,6 +562,7 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
     drive.email = null;
     drive.fileId = null;
     localStorage.removeItem('fibaa_drive_was_signed_in');
+    localStorage.removeItem('fibaa_drive_last_email');
     document.getElementById('btnDriveSignIn').style.display = '';
     document.getElementById('btnDriveSignOut').style.display = 'none';
     driveSetStatus(L('☁ Chưa đồng bộ Google Drive · Đã đăng xuất','☁ Not synced · Signed out'));
