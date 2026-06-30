@@ -380,7 +380,9 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
   function driveSetSyncTime(){
     var el = document.getElementById('driveSyncTime');
     if(!el) return;
-    el.textContent = L('Đồng bộ lúc ', 'Synced at ') + new Date().toLocaleTimeString(state.lang === 'en' ? 'en-US' : 'vi-VN');
+    var timeStr = new Date().toLocaleTimeString(state.lang === 'en' ? 'en-US' : 'vi-VN');
+    var emailStr = drive.email ? (drive.email + ' · ') : '';
+    el.textContent = emailStr + L('Đồng bộ lúc ', 'Synced at ') + timeStr;
   }
 
   function driveApiHeaders(extra){
@@ -521,8 +523,7 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
             if(payload.notes) state.notes = payload.notes;
             renderAll();
           }
-          driveSetStatus(L('☁ Đã đồng bộ với Google Drive' + (drive.email ? ' (' + drive.email + ')' : ''),
-                           '☁ Synced with Google Drive' + (drive.email ? ' (' + drive.email + ')' : '')), 'is-synced');
+          driveSetStatus(L('☁ Đã đồng bộ với Google Drive', '☁ Synced with Google Drive'), 'is-synced');
           driveSetSyncTime();
         }catch(e){}
       });
@@ -541,8 +542,7 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
     var task = drive.fileId ? driveUpdateFile(drive.fileId, content) : driveCreateFile(content);
     task.then(function(){
       drive.saving = false;
-      driveSetStatus(L('☁ Đã lưu lên Google Drive' + (drive.email ? ' (' + drive.email + ')' : ''),
-                       '☁ Saved to Google Drive' + (drive.email ? ' (' + drive.email + ')' : '')), 'is-synced');
+      driveSetStatus(L('☁ Đã lưu lên Google Drive', '☁ Saved to Google Drive'), 'is-synced');
       driveSetSyncTime();
     }).catch(function(){
       drive.saving = false;
