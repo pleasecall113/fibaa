@@ -389,8 +389,17 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
     return h;
   }
 
-  function driveInit(){
-    if(typeof google === 'undefined' || !google.accounts || GOOGLE_CLIENT_ID.indexOf('YOUR_CLIENT_ID') === 0){
+  function driveInit(retryCount){
+    retryCount = retryCount || 0;
+    if(typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2){
+      if(retryCount < 50){ // chờ tối đa ~10 giây cho thư viện Google tải xong
+        setTimeout(function(){ driveInit(retryCount + 1); }, 200);
+      } else {
+        driveSetStatus(L('☁ Không tải được thư viện Google (kiểm tra mạng/trình chặn quảng cáo)','☁ Could not load Google library (check network/ad-blocker)'), 'is-error');
+      }
+      return;
+    }
+    if(GOOGLE_CLIENT_ID.indexOf('YOUR_CLIENT_ID') === 0){
       driveSetStatus(L('☁ Chưa cấu hình Google Drive (xem hướng dẫn)','☁ Google Drive not configured (see guide)'));
       var btn = document.getElementById('btnDriveSignIn');
       if(btn) btn.disabled = true;
