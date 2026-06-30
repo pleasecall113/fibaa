@@ -833,6 +833,10 @@ const DATA = {"rating_levels": [{"en": "Does not meet quality requirements", "vn
             if(payload.appxProgress) state.appxProgress = payload.appxProgress;
             if(payload.notes) state.notes = payload.notes;
             if(payload.appxNotes) state.appxNotes = payload.appxNotes;
+            if(payload.checkerFeedback){
+              state.checker.feedback = payload.checkerFeedback;
+              state.checker.feedbackLoaded = true;
+            }
             renderAll();
           }
           driveSetStatus('☁ Đã đồng bộ với Google Drive', 'is-synced');
@@ -847,6 +851,7 @@ const DATA = {"rating_levels": [{"en": "Does not meet quality requirements", "vn
     if(drive.saving) return;
     drive.saving = true;
     var payload = {progress: state.progress, appxProgress: state.appxProgress, notes: state.notes, appxNotes: state.appxNotes,
+                   checkerFeedback: (state.checker && state.checker.feedback) || {},
                    exportedAt: new Date().toISOString(), source: 'FIBAA SER Checklist (HUFLIT)'};
     var content = JSON.stringify(payload, null, 2);
     var task = drive.fileId ? driveUpdateFile(drive.fileId, content) : driveCreateFile(content);
@@ -1059,6 +1064,10 @@ const DATA = {"rating_levels": [{"en": "Does not meet quality requirements", "vn
               state.appxProgress = payload.appxProgress || {};
               state.notes = payload.notes || {};
               state.appxNotes = payload.appxNotes || {};
+              if(payload.checkerFeedback){
+                state.checker.feedback = payload.checkerFeedback;
+                state.checker.feedbackLoaded = true;
+              }
               renderAll();
               persist();
               document.getElementById('historyModal').style.display = 'none';
@@ -1749,6 +1758,7 @@ state.checker = {
 var FEEDBACK_STORAGE_KEY = 'fibaa_ser_checker_feedback_v1';
 function saveFeedback(){
   tryStorageSet2(FEEDBACK_STORAGE_KEY, state.checker.feedback);
+  driveScheduleSave();
 }
 function loadFeedback(){
   if(state.checker.feedbackLoaded) return Promise.resolve();
