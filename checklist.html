@@ -2871,9 +2871,18 @@ function checkDocxFormat(file){
           }
 
           function buildLocationList(matchedParagraphs){
-            var labels = matchedParagraphs.map(locationLabel);
-            var shown = labels.slice(0,6);
-            var extra = labels.length - shown.length;
+            /* Empty paragraphs (blank lines, paragraph marks) carry the same
+               line-spacing/font setting but have nothing to quote — they are
+               useless for "find in Word", so prefer paragraphs that actually
+               have text. Only fall back to empty ones if nothing else exists. */
+            var withText = matchedParagraphs.filter(function(p){ return p.text.trim().length > 0; });
+            var useList = withText.length ? withText : matchedParagraphs;
+            var labels = useList.map(locationLabel);
+            /* Dedupe identical labels (several short paragraphs can render the same quote) */
+            var seen = {}, uniq = [];
+            labels.forEach(function(l){ if(!seen[l]){ seen[l] = true; uniq.push(l); } });
+            var shown = uniq.slice(0,6);
+            var extra = uniq.length - shown.length;
             var out = shown.join('; ');
             if(extra > 0) out += '; và ' + extra + ' vị trí khác';
             return out;
