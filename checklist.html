@@ -2866,13 +2866,8 @@ function checkDocxFormat(file){
             if(!t){
               return pg ? ('trang ~' + pg + (totalPages?'/'+totalPages:'')) : 'một đoạn trống';
             }
-            if(t.length <= 140){
-              var disp = t.length > 90 ? (t.slice(0,55) + ' … ' + t.slice(-25)) : t;
-              return '"' + disp + '"' + (pg ? ' (trang ~'+pg+(totalPages?'/'+totalPages:'')+')' : '');
-            }
-            /* Long paragraph ≈ fills most of a page — point to the page instead */
-            return pg ? ('cả đoạn dài ở trang ~'+pg+(totalPages?'/'+totalPages:'')+' (xem "'+t.slice(0,40)+' …")')
-                       : ('đoạn dài bắt đầu bằng "'+t.slice(0,40)+' …"');
+            var disp = t.length > 90 ? (t.slice(0,55) + ' … ' + t.slice(-25)) : t;
+            return '"' + disp + '"' + (pg ? ' (trang ~'+pg+(totalPages?'/'+totalPages:'')+')' : '');
           }
 
           function buildLocationList(matchedParagraphs){
