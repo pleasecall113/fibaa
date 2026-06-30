@@ -2371,7 +2371,8 @@ var TYPE_META = {
   spelling: {label_vn:'Chính tả & Ngữ pháp', label_en:'Spelling & Grammar', cls:'sp-spelling', icon:'ABC'},
   grammar:  {label_vn:'Chính tả & Ngữ pháp', label_en:'Spelling & Grammar', cls:'sp-spelling', icon:'ABC'},
   style:    {label_vn:'Văn phong', label_en:'Style',    cls:'sp-style',    icon:'S'},
-  fibaa:    {label_vn:'Chuẩn FIBAA', label_en:'FIBAA Standard', cls:'sp-fibaa', icon:'F'}
+  fibaa:    {label_vn:'Chuẩn FIBAA', label_en:'FIBAA Standard', cls:'sp-fibaa', icon:'F'},
+  format:   {label_vn:'Định dạng', label_en:'Format', cls:'sp-fibaa', icon:'⎘'}
 };
 var SEV_META = {
   warning: {cls:'sev-warn', label:'⚠'},
@@ -2379,7 +2380,7 @@ var SEV_META = {
 };
 
 function checkerSummary(){
-  var counts = {spelling_grammar:0, style:0, fibaa:0};
+  var counts = {spelling_grammar:0, style:0, fibaa:0, format:0};
   (state.checker.issues||[]).forEach(function(iss){
     if(iss.type==='spelling'||iss.type==='grammar'||iss.type==='spelling_grammar') counts.spelling_grammar++;
     else if(counts[iss.type]!==undefined) counts[iss.type]++;
@@ -2594,20 +2595,18 @@ function renderCheckerResults(){
 
   var html = '';
 
-  /* ── Format check panel (only for docx files) ── */
-  html += renderFormatPanel();
-
   html += '<div class="an-summary" style="margin-top:18px;">';
   html += '<div style="font-size:13px;color:var(--muted);margin-bottom:12px;">';
   html += '<span class="i18n-en">Found <b>'+total+'</b> potential issues.</span>';
   html += '<span class="i18n-vn">Phát hiện <b>'+total+'</b> vấn đề tiềm ẩn.</span></div>';
 
   /* Summary chips */
-  html += '<div class="an-summary-cards" style="grid-template-columns:repeat(3,1fr);">';
+  html += '<div class="an-summary-cards" style="grid-template-columns:repeat(4,1fr);">';
   [
     ['spelling_grammar','Spelling & Grammar · Chính tả & Ngữ pháp'],
     ['style','Style · Văn phong'],
-    ['fibaa','FIBAA Standard · Chuẩn FIBAA']
+    ['fibaa','FIBAA Standard · Chuẩn FIBAA'],
+    ['format','Format · Định dạng']
   ].forEach(function(pair){
     var t=pair[0], m=TYPE_META[t];
     var n=counts[t]||0;
@@ -2623,7 +2622,8 @@ function renderCheckerResults(){
     ['all','All · Tất cả'],
     ['spelling_grammar','Spelling & Grammar · Chính tả & Ngữ pháp'],
     ['style','Style · Văn phong'],
-    ['fibaa','FIBAA · Chuẩn FIBAA']
+    ['fibaa','FIBAA · Chuẩn FIBAA'],
+    ['format','Format · Định dạng']
   ].forEach(function(f){
     var active=(filter===f[0]||( f[0]==='spelling_grammar' && (filter==='spelling'||filter==='grammar')))?' active':'';
     html += '<button type="button" class="an-filter-btn'+active+'" data-ch-filter="'+f[0]+'">'+f[1]+'</button>';
@@ -2828,20 +2828,26 @@ function checkDocxFormat(file){
           var SIZE_TOLERANCE = 2;       /* ±1pt */
 
           /* --- Line spacing check ---
-             In OOXML, line spacing is stored in <w:spacing w:line="N" w:lineRule="auto"/>.
-             We extract all unique line values from paragraph spacing and check. */
+             In OOXML, line spacing is stored in a self-closing <w:spacing .../> tag
+             with attributes w:line="N" and w:lineRule="auto" in ARBITRARY ORDER
+             (e.g. <w:spacing w:before="0" w:lineRule="auto" w:line="276"/>).
+             We scan every <w:spacing .../> tag and pull w:line + w:lineRule
+             independently from within that tag's attribute string. */
+          function collectLineVals(xml, out){
+            var tagRe = /<w:spacing\b([^>]*)\/>/g;
+            var tm2;
+            while((tm2 = tagRe.exec(xml)) !== null){
+              var attrs = tm2[1];
+              var lineM = attrs.match(/w:line="(\d+)"/);
+              var ruleM = attrs.match(/w:lineRule="([^"]+)"/);
+              if(lineM && ruleM && ruleM[1] === 'auto'){
+                out[parseInt(lineM[1],10)] = true;
+              }
+            }
+          }
           var lineVals = {};
-          var spacingRe = /w:line="(\d+)"[^/]*w:lineRule="auto"/g;
-          var sm;
-          while((sm = spacingRe.exec(docXml)) !== null){
-            lineVals[parseInt(sm[1],10)] = true;
-          }
-          /* Also check styles.xml for default paragraph spacing */
-          var sm2;
-          var spacingRe2 = /w:line="(\d+)"[^/]*w:lineRule="auto"/g;
-          while((sm2 = spacingRe2.exec(stylesXml)) !== null){
-            lineVals[parseInt(sm2[1],10)] = true;
-          }
+          collectLineVals(docXml, lineVals);
+          collectLineVals(stylesXml, lineVals);
           var lineKeys = Object.keys(lineVals).map(Number);
           var hasLineInfo = lineKeys.length > 0;
           if(hasLineInfo){
@@ -2879,43 +2885,44 @@ function checkDocxFormat(file){
           }
 
           /* --- Font check ---
-             In OOXML, font is in <w:rFonts w:ascii="Arial" ...> and size in <w:sz w:val="22">.
-             We check the default/Normal style and look for non-Arial fonts in the document. */
-
-          /* Check default style in styles.xml */
-          var defaultStyle = '';
-          var defaultStyleMatch = stylesXml.match(/<w:style[^>]*w:type="paragraph"[^>]*w:default="1"[^>]*>([\s\S]*?)<\/w:style>/);
-          if(!defaultStyleMatch) defaultStyleMatch = stylesXml.match(/<w:style[^>]*w:styleId="Normal"[^>]*>([\s\S]*?)<\/w:style>/);
-          if(defaultStyleMatch) defaultStyle = defaultStyleMatch[1];
-
-          /* Extract all font names referenced in the document body */
+             In OOXML, font is normally set via <w:rFonts w:ascii="Arial" w:hAnsi="Arial" .../>
+             on a <w:rPr> run, but when only a short passage is changed, Word often does NOT
+             write w:ascii directly — it may only touch w:hAnsi (Latin text) or w:eastAsia,
+             or inherit everything else from the paragraph/run style. To catch a single
+             changed run we must scan every <w:rFonts .../> tag and read ALL of its font
+             attributes (ascii, hAnsi, eastAsia, cs) independently — not just w:ascii. */
+          function collectFonts(xml, out){
+            var tagRe = /<w:rFonts\b([^>]*)\/>/g;
+            var tm3;
+            while((tm3 = tagRe.exec(xml)) !== null){
+              var attrs = tm3[1];
+              ['w:ascii','w:hAnsi','w:eastAsia','w:cs'].forEach(function(attrName){
+                var re = new RegExp(attrName + '="([^"]+)"');
+                var m = attrs.match(re);
+                if(m){
+                  var fn = m[1];
+                  if(fn && fn.toLowerCase().indexOf('theme') === -1){
+                    out[fn] = (out[fn]||0) + 1;
+                  }
+                }
+              });
+            }
+          }
           var fontNames = {};
-          var fontRe = /w:ascii="([^"]+)"/g;
-          var fm;
-          while((fm = fontRe.exec(docXml)) !== null){
-            var fn = fm[1];
-            /* Skip theme fonts and generic names */
-            if(fn && fn.indexOf('Theme') === -1 && fn !== 'Times New Roman' + '' ) {
-              fontNames[fn] = (fontNames[fn]||0) + 1;
-            }
-          }
-          /* Also check styles.xml */
-          var fontRe2 = /w:ascii="([^"]+)"/g;
-          while((fm = fontRe2.exec(stylesXml)) !== null){
-            var fn2 = fm[1];
-            if(fn2 && fn2.indexOf('Theme') === -1){
-              fontNames[fn2] = (fontNames[fn2]||0) + 1;
-            }
-          }
+          collectFonts(docXml, fontNames);
+          collectFonts(stylesXml, fontNames);
 
           var fontKeys = Object.keys(fontNames);
           var hasFontInfo = fontKeys.length > 0;
+          var nonArial = fontKeys.filter(function(f){
+            return f.toLowerCase().indexOf('arial') === -1;
+          });
+          var arialPresent = fontKeys.some(function(f){
+            return f.toLowerCase() === 'arial';
+          });
+
           if(hasFontInfo){
-            var nonArial = fontKeys.filter(function(f){
-              return f.toLowerCase().indexOf('arial') === -1;
-            });
-            var arialCount = (fontNames['Arial']||0) + (fontNames['arial']||0);
-            if(nonArial.length > 0 && arialCount === 0){
+            if(nonArial.length > 0 && !arialPresent){
               issues.push({
                 type:'format', severity:'warning',
                 sentence:'[Kiểm tra định dạng — Font]',
@@ -2924,44 +2931,22 @@ function checkDocxFormat(file){
                 excerpt:'[font: ' + nonArial.slice(0,3).join(', ') + ']'
               });
             } else if(nonArial.length > 0){
+              /* Mixed fonts: some Arial, some not — e.g. one short paragraph changed */
               issues.push({
-                type:'format', severity:'info',
+                type:'format', severity:'warning',
                 sentence:'[Kiểm tra định dạng — Font]',
-                issue_vn:'Tài liệu có sử dụng cả Arial và một số font khác: ' + nonArial.slice(0,4).join(', ') + '. Đề nghị dùng Arial 11 xuyên suốt.',
-                suggestion_vn:'Kiểm tra các đoạn dùng font khác Arial và đổi về Arial 11.',
+                issue_vn:'Tài liệu có sử dụng cả Arial và một số font khác: ' + nonArial.slice(0,4).join(', ') + '. Toàn bộ văn bản cần dùng Arial 11.',
+                suggestion_vn:'Kiểm tra các đoạn dùng font khác Arial (có thể chỉ là một đoạn ngắn) và đổi về Arial 11.',
                 excerpt:'[font: mixed — ' + nonArial.slice(0,2).join(', ') + ']'
               });
             } else {
-              /* Arial confirmed — check size */
-              var sizeVals = {};
-              var szRe = /w:sz\s+w:val="(\d+)"/g;
-              var szm;
-              while((szm = szRe.exec(docXml)) !== null) sizeVals[parseInt(szm[1],10)] = true;
-              var szRe2 = /w:sz\s+w:val="(\d+)"/g;
-              while((szm = szRe2.exec(stylesXml)) !== null) sizeVals[parseInt(szm[1],10)] = true;
-              var szKeys = Object.keys(sizeVals).map(Number);
-              var badSizes = szKeys.filter(function(v){
-                return Math.abs(v - TARGET_SIZE) > SIZE_TOLERANCE && v > 0;
+              issues.push({
+                type:'format', severity:'ok',
+                sentence:'[Kiểm tra định dạng — Font]',
+                issue_vn:'✓ Font Arial đúng chuẩn (không phát hiện font khác).',
+                suggestion_vn:'',
+                excerpt:'[font: Arial — ok]'
               });
-              /* Ignore heading sizes (anything >= 28 half-pts = 14pt) */
-              badSizes = badSizes.filter(function(v){ return v < 28; });
-              if(badSizes.length > 0){
-                issues.push({
-                  type:'format', severity:'warning',
-                  sentence:'[Kiểm tra định dạng — Font Size]',
-                  issue_vn:'Font Arial nhưng cỡ chữ thân bài không đúng: phát hiện ' + badSizes.map(function(v){return (v/2)+'pt';}).join(', ') + '. Yêu cầu: 11pt (22 half-pts).',
-                  suggestion_vn:'Chọn toàn bộ văn bản thân bài, đổi cỡ chữ về 11.',
-                  excerpt:'[font-size: ' + badSizes.map(function(v){return (v/2)+'pt';}).join(', ') + ']'
-                });
-              } else {
-                issues.push({
-                  type:'format', severity:'ok',
-                  sentence:'[Kiểm tra định dạng — Font]',
-                  issue_vn:'✓ Font Arial 11pt đúng chuẩn.',
-                  suggestion_vn:'',
-                  excerpt:'[font: Arial 11pt — ok]'
-                });
-              }
             }
           } else {
             issues.push({
@@ -2970,6 +2955,57 @@ function checkDocxFormat(file){
               issue_vn:'Không đọc được thông tin font trong file. Vui lòng kiểm tra thủ công: toàn bộ văn bản nên dùng Arial 11.',
               suggestion_vn:'Chọn toàn bộ văn bản (Ctrl+A) và kiểm tra font + cỡ chữ trong Word/Google Docs.',
               excerpt:'[font: not found]'
+            });
+          }
+
+          /* --- Font size check ---
+             Run INDEPENDENTLY of the font-name check above — a mixed-font document
+             (e.g. one short paragraph in a different font AND a different size) must
+             still have its sizes checked. w:sz is also self-closing with attributes in
+             arbitrary order, e.g. <w:sz w:val="22"/> or <w:szCs w:val="22" w:foo="1"/>. */
+          function collectSizes(xml, out){
+            var tagRe = /<w:sz\b([^>]*)\/>/g;
+            var tm4;
+            while((tm4 = tagRe.exec(xml)) !== null){
+              var m = tm4[1].match(/w:val="(\d+)"/);
+              if(m) out[parseInt(m[1],10)] = true;
+            }
+          }
+          var sizeVals = {};
+          collectSizes(docXml, sizeVals);
+          collectSizes(stylesXml, sizeVals);
+          var szKeys = Object.keys(sizeVals).map(Number);
+          var hasSizeInfo = szKeys.length > 0;
+          if(hasSizeInfo){
+            var badSizes = szKeys.filter(function(v){
+              return Math.abs(v - TARGET_SIZE) > SIZE_TOLERANCE && v > 0;
+            });
+            /* Ignore heading sizes (anything >= 28 half-pts = 14pt) */
+            badSizes = badSizes.filter(function(v){ return v < 28; });
+            if(badSizes.length > 0){
+              issues.push({
+                type:'format', severity:'warning',
+                sentence:'[Kiểm tra định dạng — Font Size]',
+                issue_vn:'Cỡ chữ thân bài không đúng chuẩn: phát hiện ' + badSizes.map(function(v){return (v/2)+'pt';}).join(', ') + '. Yêu cầu: 11pt (22 half-pts).',
+                suggestion_vn:'Chọn toàn bộ văn bản thân bài, đổi cỡ chữ về 11.',
+                excerpt:'[font-size: ' + badSizes.map(function(v){return (v/2)+'pt';}).join(', ') + ']'
+              });
+            } else {
+              issues.push({
+                type:'format', severity:'ok',
+                sentence:'[Kiểm tra định dạng — Font Size]',
+                issue_vn:'✓ Cỡ chữ thân bài 11pt đúng chuẩn.',
+                suggestion_vn:'',
+                excerpt:'[font-size: 11pt — ok]'
+              });
+            }
+          } else {
+            issues.push({
+              type:'format', severity:'info',
+              sentence:'[Kiểm tra định dạng — Font Size]',
+              issue_vn:'Không đọc được thông tin cỡ chữ trong file. Vui lòng kiểm tra thủ công: cỡ chữ thân bài nên là 11pt.',
+              suggestion_vn:'Chọn toàn bộ văn bản thân bài và kiểm tra cỡ chữ trong Word/Google Docs.',
+              excerpt:'[font-size: not found]'
             });
           }
 
@@ -3041,14 +3077,14 @@ function runChecker(){
     var nonSpGram = localIssues.filter(function(iss){
       return iss.type !== 'spelling' && iss.type !== 'grammar';
     });
-    state.checker.issues = ltIssues.concat(nonSpGram);
+    state.checker.issues = ltIssues.concat(nonSpGram).concat(state.checker.fmtIssues||[]);
     state.checker.ran=true;
     state.checker.running=false;
     renderAll();
   }).catch(function(){
     /* Fallback to local spelling/grammar if API fails */
     showToast('LanguageTool không kết nối được — dùng kiểm tra cục bộ · LanguageTool unreachable, using local checks');
-    state.checker.issues = localIssues;
+    state.checker.issues = localIssues.concat(state.checker.fmtIssues||[]);
     state.checker.ran=true;
     state.checker.running=false;
     renderAll();
