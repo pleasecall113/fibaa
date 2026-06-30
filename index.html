@@ -239,6 +239,14 @@
   .drive-btn-signin:hover{background:#4a6da3;}
   .drive-btn-signout{background:none; border:1px solid rgba(255,255,255,.25); color:rgba(255,255,255,.75);}
   .drive-sync-time{font-family:var(--sans); font-size:10px; color:rgba(255,255,255,.45);}
+
+  .history-item{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); font-family:var(--sans); font-size:13px;}
+  .history-item:last-child{border-bottom:none;}
+  .history-item-time{color:var(--navy-deep); font-weight:600;}
+  .history-item-current{font-size:11px; color:var(--muted);}
+  .history-restore-btn{font-family:var(--sans); font-size:12px; font-weight:700; background:var(--slate); color:#fff; border:none; border-radius:7px; padding:6px 12px; cursor:pointer; white-space:nowrap;}
+  .history-restore-btn:hover{background:var(--navy);}
+  .history-empty{padding:24px 14px; text-align:center; color:var(--muted); font-family:var(--sans); font-size:13px;}
 </style>
 </head>
 <body>
@@ -256,6 +264,7 @@
       <div class="drive-status" id="driveStatusText">☁ Chưa đồng bộ Google Drive · Not synced</div>
       <button class="side-btn drive-btn-signin" id="btnDriveSignIn">🔐 Đăng nhập Google · Sign in</button>
       <button class="side-btn drive-btn-signout" id="btnDriveSignOut" style="display:none;">🔓 Đăng xuất · Sign out</button>
+      <button class="side-btn" id="btnDriveHistory" style="display:none;">🕒 Lịch sử phiên bản · Version history</button>
       <div class="drive-sync-time" id="driveSyncTime"></div>
     </div>
 
@@ -325,6 +334,16 @@
     </div>
   </div>
 </div>
+<div id="historyModal" style="display:none;" class="modal-backdrop">
+  <div class="modal-box" style="max-width:480px; text-align:left;">
+    <h3 style="text-align:center;">🕒 Lịch sử phiên bản<br><span style="font-size:14px;font-weight:400;color:var(--muted);">Version history</span></h3>
+    <p style="text-align:center;">Chọn một mốc thời gian để khôi phục lại tiến độ tại thời điểm đó.<br><em>Pick a point in time to restore progress to that state.</em></p>
+    <div id="historyList" style="max-height:320px; overflow-y:auto; border:1px solid var(--line); border-radius:10px; margin-bottom:18px;"></div>
+    <div class="modal-actions">
+      <button class="modal-btn-no" id="historyCloseBtn">Đóng · Close</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
@@ -357,7 +376,7 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
         của OAuth Client ID.
   ======================================================= */
   var GOOGLE_CLIENT_ID = '79443904322-cdulfaot22u2a5q8clmpqcdaaa3g1s0i.apps.googleusercontent.com';
-  var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
   var DRIVE_FILE_NAME = 'fibaa_tracker_progress.json';
 
   var drive = {
@@ -448,6 +467,7 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
     localStorage.setItem('fibaa_drive_was_signed_in', '1');    drive.ready = true;
     document.getElementById('btnDriveSignIn').style.display = 'none';
     document.getElementById('btnDriveSignOut').style.display = '';
+    document.getElementById('btnDriveHistory').style.display = '';
     driveSetStatus(L('☁ Đang kết nối Drive…','☁ Connecting to Drive…'));
     fetch('https://www.googleapis.com/oauth2/v2/userinfo', {headers: driveApiHeaders()})
       .then(function(r){ return r.json(); })
@@ -565,8 +585,77 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
     localStorage.removeItem('fibaa_drive_last_email');
     document.getElementById('btnDriveSignIn').style.display = '';
     document.getElementById('btnDriveSignOut').style.display = 'none';
+    document.getElementById('btnDriveHistory').style.display = 'none';
     driveSetStatus(L('☁ Chưa đồng bộ Google Drive · Đã đăng xuất','☁ Not synced · Signed out'));
     document.getElementById('driveSyncTime').textContent = '';
+  }
+
+  /* ---- Lịch sử phiên bản (Drive Revisions API) ---- */
+  function driveListRevisions(){
+    if(!drive.fileId) return Promise.resolve([]);
+    return fetch('https://www.googleapis.com/drive/v3/files/' + drive.fileId + '/revisions?fields=revisions(id,modifiedTime)&pageSize=200', {
+      headers: driveApiHeaders()
+    }).then(function(r){ return r.json(); }).then(function(data){
+      return (data.revisions || []).sort(function(a,b){ return new Date(b.modifiedTime) - new Date(a.modifiedTime); });
+    }).catch(function(){ return []; });
+  }
+
+  function driveDownloadRevision(revisionId){
+    return fetch('https://www.googleapis.com/drive/v3/files/' + drive.fileId + '/revisions/' + revisionId + '?alt=media', {
+      headers: driveApiHeaders()
+    }).then(function(r){ return r.ok ? r.text() : null; });
+  }
+
+  function fmtDateTimeVN(iso){
+    var d = new Date(iso);
+    return d.toLocaleString(state.lang === 'en' ? 'en-US' : 'vi-VN', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  }
+
+  function openHistoryModal(){
+    var listEl = document.getElementById('historyList');
+    listEl.innerHTML = '<div class="history-empty">' + L('Đang tải danh sách phiên bản…','Loading version list…') + '</div>';
+    document.getElementById('historyModal').style.display = 'flex';
+    if(!drive.fileId){
+      listEl.innerHTML = '<div class="history-empty">' + L('Chưa có dữ liệu nào được lưu lên Drive.','No data saved to Drive yet.') + '</div>';
+      return;
+    }
+    driveListRevisions().then(function(revisions){
+      if(!revisions.length){
+        listEl.innerHTML = '<div class="history-empty">' + L('Drive chưa ghi nhận phiên bản cũ nào (file mới tạo, hoặc Drive chưa đồng bộ xong).','Drive has no older versions yet (file just created, or not yet synced).') + '</div>';
+        return;
+      }
+      listEl.innerHTML = '';
+      revisions.forEach(function(rev, idx){
+        var row = document.createElement('div');
+        row.className = 'history-item';
+        var label = document.createElement('div');
+        label.innerHTML = '<div class="history-item-time">' + fmtDateTimeVN(rev.modifiedTime) + '</div>' +
+          (idx === 0 ? '<div class="history-item-current">' + L('Phiên bản mới nhất','Latest version') + '</div>' : '');
+        var btn = document.createElement('button');
+        btn.className = 'history-restore-btn';
+        btn.textContent = L('Khôi phục','Restore');
+        btn.addEventListener('click', function(){
+          if(!confirm(L('Khôi phục về thời điểm ' + fmtDateTimeVN(rev.modifiedTime) + '? Tiến độ hiện tại sẽ bị thay thế (nhưng vẫn còn trong lịch sử phiên bản).',
+                        'Restore to ' + fmtDateTimeVN(rev.modifiedTime) + '? Current progress will be replaced (but stays in version history).'))) return;
+          driveDownloadRevision(rev.id).then(function(text){
+            if(!text){ showToast(L('Không tải được phiên bản này','Could not load this version')); return; }
+            try{
+              var payload = JSON.parse(text);
+              state.progress = payload.progress || {};
+              state.progProgress = payload.progProgress || {};
+              state.notes = payload.notes || {};
+              renderAll();
+              persist(); // lưu lại làm phiên bản mới nhất + ghi lên Drive
+              document.getElementById('historyModal').style.display = 'none';
+              showToast(L('Đã khôi phục tiến độ','Progress restored'));
+            }catch(e){ showToast(L('File phiên bản không hợp lệ','Invalid version file')); }
+          });
+        });
+        row.appendChild(label);
+        row.appendChild(btn);
+        listEl.appendChild(row);
+      });
+    });
   }
   /* =============== END GOOGLE DRIVE SYNC =============== */
 
@@ -1280,6 +1369,10 @@ const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm địn
       if(drive.tokenClient) drive.tokenClient.requestAccessToken({prompt: 'consent'});
     });
     document.getElementById('btnDriveSignOut').addEventListener('click', driveSignOut);
+    document.getElementById('btnDriveHistory').addEventListener('click', openHistoryModal);
+    document.getElementById('historyCloseBtn').addEventListener('click', function(){
+      document.getElementById('historyModal').style.display = 'none';
+    });
     driveInit();
   });
 })();
