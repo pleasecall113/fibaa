@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIBAA Progress Tracker · HUFLIT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Serif:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B2330;
+    --muted:#5B6472;
+    --faint:#8B93A0;
+    --bg:#EEF1EE;
+    --bg-deep:#E4E8E3;
+    --card:#FFFFFF;
+    --line:#D9DFD9;
+    --navy:#1F3A5F;
+    --navy-deep:#142840;
+    --slate:#3A5A8C;
+    --gold:#A8721E;
+    --gold-bg:#FBF1E2;
+    --green:#2F7D52;
+    --green-bg:#E8F4ED;
+    --red:#B0432F;
+    --red-bg:#FBEAE6;
+    --blue-bg:#EAF0F8;
+    --serif: 'Noto Serif', Georgia, serif;
+    --sans: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:var(--sans); background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; line-height:1.5;}
+  a{color:var(--slate);}
+
+  .app{display:grid; grid-template-columns: 248px 1fr; min-height:100vh;}
+  @media (max-width: 880px){ .app{grid-template-columns: 1fr;} .sidebar{position:static; width:auto; height:auto; order:2;} .main{order:1;} }
+
+  .sidebar{background:var(--navy-deep); color:#DCE4EE; padding:22px 16px 24px; position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;}
+  .brand{font-family:var(--sans); font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:#9FB4CE; margin-bottom:2px;}
+  .brand strong{display:block; font-size:21px; letter-spacing:0; text-transform:none; color:#fff; margin-top:4px; font-weight:700;}
+  .sub-brand{font-size:12px; color:#7E91A8; margin-top:6px; margin-bottom:22px; line-height:1.45;}
+
+  nav.toc{display:flex; flex-direction:column; gap:2px; margin-bottom:18px;}
+  nav.toc a{display:flex; align-items:baseline; gap:8px; color:#C7D3E0; text-decoration:none; font-size:13.5px; padding:7px 8px; border-radius:7px; transition:background .15s ease;}
+  nav.toc a:hover{background:rgba(255,255,255,.07);}
+  nav.toc a.active{background:rgba(255,255,255,.12); color:#fff;}
+  nav.toc a .num{font-family:var(--mono); font-size:11.5px; color:#7E91A8; min-width:20px;}
+  nav.toc a .cnt{margin-left:auto; font-family:var(--mono); font-size:11px; color:#7E91A8;}
+  nav.toc a.active .cnt{color:#cfe0f3;}
+
+  .side-divider{height:1px; background:rgba(255,255,255,.12); margin:14px 0;}
+  .side-tools{display:flex; flex-direction:column; gap:8px;}
+  .side-btn{font-family:var(--sans); font-size:12.5px; font-weight:600; background:rgba(255,255,255,.06); color:#DCE4EE; border:1px solid rgba(255,255,255,.14); border-radius:7px; padding:8px 10px; cursor:pointer; text-align:left;}
+  .side-btn:hover{background:rgba(255,255,255,.13);}
+  .lang-toggle{display:flex; border-radius:8px; overflow:hidden; border:1px solid rgba(255,255,255,.18); margin-bottom:2px;}
+  .lang-toggle button{flex:1; font-family:var(--sans); font-size:13px; font-weight:700; background:transparent; color:#9FB4CE; border:none; padding:8px 0; cursor:pointer; transition:background .15s, color .15s; letter-spacing:.05em;}
+  .lang-toggle button.active{background:rgba(255,255,255,.18); color:#fff;}
+  .lang-toggle button:hover:not(.active){background:rgba(255,255,255,.08);}
+  .lang-label{font-size:10.5px; color:#6E83A0; text-align:center; margin-bottom:14px;}
+  .side-note{font-size:11px; color:#6E83A0; margin-top:10px; line-height:1.5;}
+
+  .main{padding:28px 36px 80px; max-width:1080px;}
+  @media (max-width:880px){ .main{padding:20px 18px 60px;} }
+
+  header.top{display:flex; justify-content:space-between; align-items:flex-start; gap:18px; flex-wrap:wrap; margin-bottom:18px;}
+  h1.page-title{font-family:var(--sans); font-weight:700; font-size:26px; margin:0 0 4px; color:var(--navy-deep); letter-spacing:-.01em;}
+  .page-title .vn{display:block; font-size:14.5px; font-weight:400; color:var(--muted); font-style:italic; margin-top:4px;}
+  .pill-btn{font-family:var(--sans); font-size:12.5px; font-weight:600; padding:7px 12px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--navy); cursor:pointer;}
+  .pill-btn:hover{background:var(--bg-deep);}
+
+  /* countdown chips */
+  .chips-row{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;}
+  .chip-card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; min-width:170px; flex:1;}
+  .chip-card .cc-label{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); display:block; margin-bottom:4px;}
+  .chip-card .cc-num{font-family:var(--mono); font-size:24px; font-weight:700; color:var(--navy);}
+  .chip-card .cc-num span{font-size:12px; font-weight:400; color:var(--muted);}
+  .chip-card .cc-sub{font-size:11.5px; color:var(--muted); margin-top:3px; font-style:italic;}
+  .chip-card.urgent{border-color:#E3B8AE; background:var(--red-bg);}
+  .chip-card.urgent .cc-num{color:var(--red);}
+
+  /* overall progress */
+  .progress-wrap{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin-bottom:22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
+  .progress-num{font-family:var(--mono); font-size:24px; font-weight:700; color:var(--navy); min-width:96px;}
+  .progress-num span{font-size:13px; color:var(--muted); font-weight:400;}
+  .progress-bar-track{flex:1; min-width:160px; height:9px; border-radius:6px; background:var(--bg-deep); overflow:hidden;}
+  .progress-bar-fill{height:100%; background:linear-gradient(90deg, var(--slate), var(--green)); border-radius:6px; transition:width .25s ease;}
+  .progress-label{font-size:12.5px; color:var(--muted);}
+
+  section.view{display:none;}
+  section.view.active{display:block;}
+
+  .section-card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin-bottom:18px;}
+  .section-card h2{font-family:var(--sans); font-size:19px; font-weight:700; margin:0 0 4px; color:var(--navy-deep); letter-spacing:-.01em;}
+  .section-card h2 .vn{display:block; font-size:13.5px; font-weight:400; font-style:italic; color:var(--muted); margin-top:2px;}
+  .section-card .desc{font-size:13px; color:var(--muted); margin-bottom:14px;}
+
+  /* gantt */
+  .gantt-scroll{overflow-x:auto; padding-bottom:4px;}
+  .gantt{position:relative; min-width:980px;}
+  .gantt-months{display:flex; border-bottom:1px solid var(--line); margin-bottom:6px;}
+  .gantt-corner{width:168px; flex-shrink:0; position:sticky; left:0; background:var(--card); z-index:3;}
+  .gantt-month{flex:1; font-family:var(--mono); font-size:10.5px; color:var(--muted); text-align:left; padding:4px 0; border-left:1px dashed var(--line); white-space:nowrap; overflow:visible;}
+  .gantt-row{display:flex; align-items:center; height:40px; position:relative;}
+  .gantt-row-label{width:168px; flex-shrink:0; font-size:12px; padding-right:10px; color:var(--ink); position:sticky; left:0; background:var(--card); z-index:20;}
+  .gantt-row-label b{font-family:var(--mono); color:var(--navy); margin-right:4px;}
+  .gantt-track{flex:1; position:relative; height:24px; background:var(--bg); border-radius:6px;}
+  .gantt-bar{position:absolute; top:0; height:24px; border-radius:6px; display:flex; align-items:center; padding:0 8px; font-size:10.5px; color:#fff; font-weight:600; white-space:nowrap; overflow:hidden; cursor:pointer;}
+  .gantt-bar.status-done{opacity:.55;}
+  .gantt-bar.status-overdue{box-shadow:0 0 0 2px var(--red) inset;}
+  .gantt-today-line{position:absolute; top:-4px; bottom:0; width:2px; background:var(--red); z-index:1;}
+  .gantt-today-label{position:absolute; top:-26px; font-size:10px; font-family:var(--mono); color:var(--red); font-weight:700; transform:translateX(-50%); white-space:nowrap;}
+  .gantt-milestone{position:absolute; top:-8px; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:8px solid var(--gold); transform:translateX(-6px); cursor:default; z-index:1;}
+  .gantt-label-mask{position:absolute; top:0; bottom:0; left:0; width:168px; background:var(--card); z-index:5; pointer-events:none;}
+  .gantt-body{position:relative; padding-top:16px;}
+  .legend-row{display:flex; gap:14px; margin-top:14px; flex-wrap:wrap; font-size:11.5px; color:var(--muted);}
+  .legend-dot{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:middle;}
+
+  /* task cards */
+  .task{background:var(--card); border:1px solid var(--line); border-radius:12px; margin-bottom:12px; overflow:hidden;}
+  .task.is-done{border-color:var(--green);}
+  .task.is-overdue{border-color:var(--red);}
+  .task-head{display:flex; align-items:flex-start; gap:12px; padding:14px 16px; cursor:pointer;}
+  .task-code{font-family:var(--mono); font-weight:700; font-size:13px; color:#fff; border-radius:7px; padding:4px 8px; min-width:34px; text-align:center; flex-shrink:0;}
+  .task-titles{flex:1;}
+  .task-title-vn{font-weight:700; font-size:14.5px;}
+  .task-title-en{font-size:12.5px; color:var(--muted); font-style:italic; margin-top:1px;}
+  .task-meta{display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;}
+  .meta-chip{font-size:11px; padding:3px 8px; border-radius:6px; background:var(--bg); color:var(--muted); font-family:var(--mono);}
+  .status-badge{font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:20px; text-transform:uppercase; letter-spacing:.03em; flex-shrink:0; margin-top:2px;}
+  .status-upcoming{background:var(--blue-bg); color:var(--slate);}
+  .status-inprogress{background:var(--gold-bg); color:var(--gold);}
+  .status-done{background:var(--green-bg); color:var(--green);}
+  .status-overdue{background:var(--red-bg); color:var(--red);}
+  .task-check{flex-shrink:0; display:flex; align-items:center; gap:6px; margin-top:2px;}
+  .task-check input{width:18px; height:18px; accent-color:var(--green); cursor:pointer;}
+  .task-check label{font-size:11px; color:var(--muted); cursor:pointer; white-space:nowrap;}
+  .chev{font-size:13px; color:var(--faint); margin-top:4px; transition:transform .15s ease; flex-shrink:0;}
+  .task.open .chev{transform:rotate(90deg);}
+  .task-body{display:none; padding:0 16px 16px; border-top:1px solid var(--line);}
+  .task.open .task-body{display:block;}
+  .task-desc{font-size:13px; margin:14px 0; padding:10px 12px; background:var(--bg); border-radius:8px;}
+  .task-desc .en{color:var(--ink);}
+  .task-desc .vn{color:var(--muted); font-style:italic; margin-top:5px;}
+
+  .per-prog{margin-top:8px;}
+  .per-prog-label{font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--navy); font-weight:700; margin-bottom:8px; display:block;}
+  .prog-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px;}
+  .prog-item{display:flex; align-items:center; gap:8px; background:var(--bg); border-radius:8px; padding:8px 10px; font-size:12.5px;}
+  .prog-item input{width:16px; height:16px; accent-color:var(--green); cursor:pointer; flex-shrink:0;}
+
+  /* program matrix */
+  .matrix-table{width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+  .matrix-table th, .matrix-table td{padding:10px 12px; border-bottom:1px solid var(--line); font-size:12.5px; text-align:center;}
+  .matrix-table thead th{background:var(--bg); font-size:11px; text-transform:uppercase; color:var(--muted); letter-spacing:.02em;}
+  .matrix-table td:first-child, .matrix-table th:first-child{text-align:left;}
+  .matrix-table tbody tr:last-child td{border-bottom:0;}
+  .matrix-name{font-weight:700;}
+  .matrix-sub{display:block; font-size:11px; color:var(--muted); font-weight:400; font-style:italic;}
+  .matrix-table input{width:17px; height:17px; accent-color:var(--green); cursor:pointer;}
+  .matrix-pct{font-family:var(--mono); font-weight:700;}
+  .matrix-pct.full{color:var(--green);}
+
+  /* org units */
+  .org-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;}
+  .org-card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px;}
+  .org-card h3{font-family:var(--sans); font-size:14.5px; font-weight:700; margin:0 0 2px; color:var(--navy-deep);}
+  .org-card .en{font-size:11.5px; color:var(--muted); font-style:italic; margin-bottom:8px;}
+  .org-card ul{margin:0; padding-left:18px; font-size:12px;}
+  .org-card li{margin-bottom:6px;}
+  .org-card li .en2{display:block; color:var(--muted); font-style:italic; font-size:11px;}
+
+  /* milestones list */
+  .milestone-list{display:flex; flex-direction:column; gap:0;}
+  .milestone-item{display:flex; gap:14px; padding:12px 0; border-bottom:1px dashed var(--line); align-items:flex-start;}
+  .milestone-item:last-child{border-bottom:0;}
+  .milestone-date{font-family:var(--mono); font-weight:700; font-size:13px; color:var(--navy); min-width:92px;}
+  .milestone-item.is-past .milestone-date{color:var(--green);}
+  .milestone-item.is-next .milestone-date{color:var(--gold);}
+  .milestone-text .vn2{font-size:12.5px; color:var(--muted); font-style:italic; margin-top:2px;}
+  .milestone-dot{flex-shrink:0; width:9px; height:9px; border-radius:50%; background:var(--line); margin-top:6px;}
+  .milestone-item.is-past .milestone-dot{background:var(--green);}
+  .milestone-item.is-next .milestone-dot{background:var(--gold);}
+
+  footer.page-footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); font-size:12px; color:var(--faint);}
+
+  @media print{
+    .sidebar, .pill-btn{display:none !important;}
+    .app{grid-template-columns:1fr;}
+    .task-body{display:block !important;}
+    .task{break-inside:avoid;}
+    body{background:#fff;}
+  }
+
+  .toast{position:fixed; bottom:18px; right:18px; background:var(--navy-deep); color:#fff; padding:10px 16px; border-radius:8px; font-size:13px; box-shadow:0 6px 18px rgba(0,0,0,.18); opacity:0; transform:translateY(8px); transition:opacity .2s ease, transform .2s ease; pointer-events:none; z-index:50;}
+  .toast.show{opacity:1; transform:translateY(0);}
+
+  /* notes */
+  .task-notes{margin-top:14px; border-top:1px dashed var(--line); padding-top:12px;}
+  .notes-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .notes-title{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--navy);}
+  .btn-add-note{font-family:var(--sans); font-size:12px; font-weight:600; background:var(--blue-bg); color:var(--slate); border:1px solid var(--line); border-radius:7px; padding:5px 10px; cursor:pointer;}
+  .btn-add-note:hover{background:var(--bg-deep);}
+  .note-item{background:var(--gold-bg); border:1px solid #E0C98A; border-radius:8px; padding:9px 11px; margin-bottom:7px; position:relative;}
+  .note-item .note-ts{font-size:10.5px; font-family:var(--mono); color:var(--faint); margin-bottom:4px; display:block;}
+  .note-item .note-text{font-size:12.5px; color:var(--ink); white-space:pre-wrap; word-break:break-word;}
+  .note-item .btn-del-note{position:absolute; top:6px; right:8px; background:none; border:none; color:var(--faint); cursor:pointer; font-size:14px; line-height:1; padding:2px 4px;}
+  .note-item .btn-del-note:hover{color:var(--red);}
+  .note-input-row{display:flex; gap:8px; margin-top:8px;}
+  .note-input-row textarea{flex:1; border:1px solid var(--line); border-radius:8px; font-family:var(--sans); font-size:12.5px; padding:8px 10px; resize:vertical; min-height:60px; background:var(--card); color:var(--ink);}
+  .note-input-row textarea:focus{outline:2px solid var(--slate); border-color:transparent;}
+  .btn-save-note{font-family:var(--sans); font-size:12px; font-weight:700; background:var(--slate); color:#fff; border:none; border-radius:8px; padding:8px 14px; cursor:pointer; align-self:flex-end;}
+  .btn-save-note:hover{background:var(--navy);}
+  .btn-cancel-note{font-family:var(--sans); font-size:12px; font-weight:600; background:none; color:var(--muted); border:1px solid var(--line); border-radius:8px; padding:8px 10px; cursor:pointer; align-self:flex-end;}
+  .btn-cancel-note:hover{background:var(--bg-deep);}
+
+  .side-btn-close{color:#E8A8A0; border-color:rgba(220,120,100,.3); background:rgba(180,60,40,.12);}
+  .side-btn-close:hover{background:rgba(180,60,40,.22); color:#FFDAD6;}
+
+  /* exit modal */
+  .modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:flex; align-items:center; justify-content:center;}
+  .modal-box{background:#fff; border-radius:14px; padding:28px 30px; max-width:400px; width:90%; box-shadow:0 16px 40px rgba(0,0,0,.22); text-align:center;}
+  .modal-box h3{font-family:var(--sans); font-size:18px; font-weight:700; color:var(--navy-deep); margin:0 0 10px;}
+  .modal-box p{font-size:13.5px; color:var(--muted); margin:0 0 22px; line-height:1.5;}
+  .modal-actions{display:flex; gap:10px; justify-content:center;}
+  .modal-btn-yes{font-family:var(--sans); font-size:13.5px; font-weight:700; background:var(--slate); color:#fff; border:none; border-radius:9px; padding:10px 22px; cursor:pointer;}
+  .modal-btn-yes:hover{background:var(--navy);}
+  .modal-btn-no{font-family:var(--sans); font-size:13.5px; font-weight:600; background:none; color:var(--muted); border:1px solid var(--line); border-radius:9px; padding:10px 22px; cursor:pointer;}
+  .modal-btn-no:hover{background:var(--bg-deep);}
+
+  /* Google Drive sync box */
+  .drive-box{display:flex; flex-direction:column; gap:6px;}
+  .drive-status{font-family:var(--sans); font-size:11.5px; color:rgba(255,255,255,.65); line-height:1.4;}
+  .drive-status.is-synced{color:#9FE6B0;}
+  .drive-status.is-error{color:#FFB3A7;}
+  .drive-btn-signin{background:#3A5A8C; color:#fff;}
+  .drive-btn-signin:hover{background:#4a6da3;}
+  .drive-btn-signout{background:none; border:1px solid rgba(255,255,255,.25); color:rgba(255,255,255,.75);}
+  .drive-sync-time{font-family:var(--sans); font-size:10px; color:rgba(255,255,255,.45);}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">FIBAA · HUFLIT</div>
+    <strong>Progress Tracker</strong>
+    <div class="sub-brand">Theo dõi tiến độ kế hoạch kiểm định chất lượng CTĐT · Implementation progress tracker</div>
+
+    <nav class="toc" id="tocNav"></nav>
+
+    <div class="side-divider"></div>
+    <div class="drive-box" id="driveBox">
+      <div class="drive-status" id="driveStatusText">☁ Chưa đồng bộ Google Drive · Not synced</div>
+      <button class="side-btn drive-btn-signin" id="btnDriveSignIn">🔐 Đăng nhập Google · Sign in</button>
+      <button class="side-btn drive-btn-signout" id="btnDriveSignOut" style="display:none;">🔓 Đăng xuất · Sign out</button>
+      <div class="drive-sync-time" id="driveSyncTime"></div>
+    </div>
+
+    <div class="side-divider"></div>
+    <div class="side-tools">
+      <button class="side-btn" id="btnExpandAll">Mở rộng tất cả · Expand all</button>
+      <button class="side-btn" id="btnCollapseAll">Thu gọn tất cả · Collapse all</button>
+      <button class="side-btn" id="btnExport">⬇ Xuất tiến độ · Export progress</button>
+      <button class="side-btn" id="btnImport">⬆ Nhập tiến độ · Import progress</button>
+      <input type="file" id="fileImport" accept="application/json" style="display:none;">
+      <button class="side-btn" id="btnPrint">🖶 In / Lưu PDF · Print</button>
+    </div>
+    <div class="side-note">Trạng thái "Đang triển khai/Trễ hạn" được tính tự động theo ngày hôm nay. Tích "Hoàn thành" khi công việc đã xong. Khi đăng nhập Google, tiến độ tự lưu vào Drive của bạn. Dùng "Xuất tiến độ" nếu muốn chia sẻ file JSON với đơn vị khác.</div>
+
+    <div class="side-divider"></div>
+    <div class="lang-toggle" id="langToggle">
+      <button id="btnLangVI" class="active" title="Hiển thị tiếng Việt">🇻🇳 VI</button>
+      <button id="btnLangEN" title="Display in English">🇬🇧 EN</button>
+    </div>
+    <div class="lang-label" id="langLabel">Ngôn ngữ hiển thị · Display language</div>
+
+    <div class="side-divider"></div>
+    <button class="side-btn side-btn-close" id="btnClose">⏻ Đóng · Close</button>
+  </aside>
+
+  <main class="main">
+
+    <header class="top">
+      <h1 class="page-title" id="planTitle"></h1>
+    </header>
+
+    <div class="chips-row" id="chipsRow"></div>
+
+    <div class="progress-wrap">
+      <div class="progress-num"><span id="progressDone">0</span><span id="progressMilestoneLabel">/<span id="progressTotal">0</span> mốc công việc xong</span></div>
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-label" id="progressLabel">0% kế hoạch hoàn thành</div>
+    </div>
+
+    <div id="viewRoot"></div>
+
+    <footer class="page-footer">
+      Nguồn: Kế hoạch triển khai kiểm định chất lượng CTĐT theo Bộ tiêu chuẩn FIBAA (Số: …/KH-ĐNT, dự thảo 04/2026) — Trường Đại học Ngoại ngữ – Tin học TP.HCM. Công cụ theo dõi nội bộ, song ngữ Việt–Anh.
+    </footer>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="exitModal" style="display:none;" class="modal-backdrop">
+  <div class="modal-box">
+    <h3>Xuất dữ liệu trước khi thoát?<br><span style="font-size:14px;font-weight:400;color:var(--muted);">Export data before leaving?</span></h3>
+    <p>Bạn có muốn xuất file tiến độ (JSON) trước khi đóng trang không?<br><em>Would you like to export the progress file before closing?</em></p>
+    <div class="modal-actions">
+      <button class="modal-btn-yes" id="exitExportYes">⬇ Có, xuất file · Yes, export</button>
+      <button class="modal-btn-no" id="exitExportNo">Không · No</button>
+    </div>
+  </div>
+</div>
+<div id="closeModal" style="display:none;" class="modal-backdrop">
+  <div class="modal-box">
+    <h3 id="closeModalTitle">Xuất dữ liệu trước khi đóng?<br><span style="font-size:14px;font-weight:400;color:var(--muted);">Export data before closing?</span></h3>
+    <p id="closeModalBody">Có muốn xuất file tiến độ (JSON, gồm cả ghi chú) trước khi đóng không?<br><em>Export the progress file (JSON, including notes) before closing?</em></p>
+    <div class="modal-actions">
+      <button class="modal-btn-yes" id="closeExportYes">⬇ Có, xuất dữ liệu · Yes, export</button>
+      <button class="modal-btn-no" id="closeExportNo">Không, đóng luôn · Close now</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+const DATA = {"meta": {"plan_title_vn": "Kế hoạch triển khai kiểm định chất lượng CTĐT theo Bộ tiêu chuẩn FIBAA", "plan_title_en": "Implementation plan — FIBAA programme accreditation", "plan_subtitle_vn": "Ngành Ngôn ngữ Anh (Thạc sĩ, 2023–2025) · Ngành CNTT, Ngôn ngữ Anh, Kinh doanh quốc tế, Quản trị kinh doanh (Đại học, 2021–2025) — Trường Đại học Ngoại ngữ – Tin học TP.HCM (HUFLIT)", "plan_subtitle_en": "English Linguistics (Master's, 2023–2025) · IT, English Linguistics, International Business, Business Administration (Bachelor's, 2021–2025) — HUFLIT", "window_vn": "Thời gian tự đánh giá và đánh giá ngoài: tháng 6/2026 – tháng 8/2027", "window_en": "Self-evaluation & external-assessment window: June 2026 – August 2027", "timeline_start": "2026-06-01", "timeline_end": "2027-08-15"}, "programs": [{"id": "P1", "level": "Thạc sĩ", "level_en": "Master", "name_vn": "Ngôn ngữ Anh (giai đoạn 2023–2025)", "name_en": "English Linguistics (2023–2025 cohort)", "unit_vn": "Phòng ĐTSĐH-KHCN & Khoa Ngoại ngữ", "unit_en": "Department of Postgraduate Education - Science and Technology / Faculty of Foreign Languages"}, {"id": "P2", "level": "Đại học", "level_en": "Bachelor", "name_vn": "Công nghệ thông tin (giai đoạn 2021–2025)", "name_en": "Information Technology (2021–2025 cohort)", "unit_vn": "Khoa Công nghệ thông tin", "unit_en": "Faculty of Information Technology"}, {"id": "P3", "level": "Đại học", "level_en": "Bachelor", "name_vn": "Ngôn ngữ Anh (giai đoạn 2021–2025)", "name_en": "English Linguistics (2021–2025 cohort)", "unit_vn": "Khoa Ngoại ngữ", "unit_en": "Faculty of Foreign Languages"}, {"id": "P4", "level": "Đại học", "level_en": "Bachelor", "name_vn": "Kinh doanh quốc tế (giai đoạn 2021–2025)", "name_en": "International Business (2021–2025 cohort)", "unit_vn": "Khoa Quản trị kinh doanh", "unit_en": "Faculty of Business Administration"}, {"id": "P5", "level": "Đại học", "level_en": "Bachelor", "name_vn": "Quản trị kinh doanh (giai đoạn 2021–2025)", "name_en": "Business Administration (2021–2025 cohort)", "unit_vn": "Khoa Quản trị kinh doanh", "unit_en": "Faculty of Business Administration"}], "phases": [{"id": "I", "name_vn": "Giai đoạn 1 — Rà soát chương trình đào tạo", "name_en": "Phase 1 — Programme review", "color": "#3A5A8C"}, {"id": "II", "name_vn": "Giai đoạn 2 — Thực hiện tự đánh giá theo tiêu chuẩn FIBAA", "name_en": "Phase 2 — Self-evaluation per FIBAA standards", "color": "#A8721E"}, {"id": "III", "name_vn": "Giai đoạn 3 — Liên hệ, đăng ký, kiểm định và đánh giá ngoài với FIBAA", "name_en": "Phase 3 — Contact, registration, accreditation & external assessment with FIBAA", "color": "#2F7D52"}], "tasks": [{"id": "T1", "phase": "I", "start": "2026-06-01", "end": "2026-07-31", "lead_vn": "Phòng KT-BĐCLGD", "lead_en": "Department of Educational Testing and Quality Assurance", "collab_vn": "Khoa và các đơn vị liên quan", "collab_en": "Faculties and related units", "desc_vn": "Lập Kế hoạch tự đánh giá và Quyết định nhóm nòng cốt TĐG các CTĐT. Tập huấn nội bộ.", "desc_en": "Draft the self-evaluation plan and issue the decision forming each programme's core self-assessment team. Internal training.", "per_program": false}, {"id": "T2", "phase": "I", "start": "2026-06-01", "end": "2026-06-30", "lead_vn": "Khoa, Bộ môn, Phòng ĐTSĐH-KHCN", "lead_en": "Faculties, Departments, Department of Postgraduate Education - Science and Technology", "collab_vn": "Các đơn vị liên quan", "collab_en": "Related units", "desc_vn": "Các khoa, bộ môn, Phòng ĐTSĐH-KHCN rà soát toàn bộ chương trình đào tạo theo Bộ tiêu chuẩn FIBAA, bám sát yêu cầu các tiêu chí dấu sao (*).", "desc_en": "Faculties, departments and the Graduate Training Office review the entire programme against the FIBAA standards, focusing on asterisk-criteria requirements.", "per_program": true}, {"id": "T3", "phase": "II", "start": "2026-06-01", "end": "2026-10-31", "lead_vn": "Trung tâm TT-TCSK", "lead_en": "Center of Communications - Event Management", "collab_vn": "Khoa, Bộ môn", "collab_en": "Faculties, departments", "desc_vn": "Xây dựng và hoàn thiện website tiếng Anh theo yêu cầu phục vụ kiểm định quốc tế.", "desc_en": "Build and finalise the English-language website required for the international accreditation process.", "per_program": false}, {"id": "T4", "phase": "II", "start": "2026-07-01", "end": "2026-08-30", "lead_vn": "Khoa, Bộ môn", "lead_en": "Faculties, departments", "collab_vn": "Các đơn vị liên quan", "collab_en": "Related units", "desc_vn": "Viết báo cáo tự đánh giá (SER). Hoàn thiện CV tiếng Anh của giảng viên theo mẫu FIBAA. Rà soát và dịch các minh chứng theo yêu cầu của SER.", "desc_en": "Write the Self-Evaluation Report (SER). Finalise lecturers' English CVs per the FIBAA template. Review and translate evidence required by the SER.", "per_program": true}, {"id": "T5", "phase": "III", "start": "2026-09-01", "end": "2026-09-30", "lead_vn": "Phòng KT-BĐCLGD", "lead_en": "Department of Educational Testing and Quality Assurance", "collab_vn": "Phòng Đối ngoại, Phòng KH-TC", "collab_en": "Department of External Relations, Department of Planning and Finance", "desc_vn": "Liên hệ, thương lượng hợp đồng chuyên môn và đăng ký kiểm định với FIBAA. Rà soát, chỉnh sửa các SER.", "desc_en": "Contact FIBAA, negotiate the professional service contract and register for accreditation. Review and revise the SERs.", "per_program": false}, {"id": "T6", "phase": "III", "start": "2026-09-01", "end": "2026-11-30", "lead_vn": "Khoa, Bộ môn", "lead_en": "Faculties, departments", "collab_vn": "Các đơn vị liên quan", "collab_en": "Related units", "desc_vn": "Rà soát, chỉnh sửa SER, hoàn thành các biểu mẫu, bổ sung hồ sơ theo yêu cầu của FIBAA.", "desc_en": "Review and revise the SERs, complete all forms, and supplement records as required by FIBAA.", "per_program": true}, {"id": "T7", "phase": "III", "start": "2026-12-01", "end": "2027-05-30", "lead_vn": "Phòng KT-BĐCLGD", "lead_en": "Department of Educational Testing and Quality Assurance", "collab_vn": "Các đơn vị liên quan", "collab_en": "Related units", "desc_vn": "Bổ sung hồ sơ minh chứng khi có yêu cầu từ FIBAA. Đánh giá ngoài (dự kiến — theo lịch thực tế của FIBAA).", "desc_en": "Supplement evidence files upon FIBAA's request. External assessment (provisional — subject to FIBAA's actual schedule).", "per_program": false}, {"id": "T8", "phase": "III", "start": "2027-06-01", "end": "2027-08-15", "lead_vn": "Phòng KT-BĐCLGD", "lead_en": "Department of Educational Testing and Quality Assurance", "collab_vn": "Các đơn vị liên quan", "collab_en": "Related units", "desc_vn": "Hoàn thiện hồ sơ sau đánh giá ngoài (ĐGN) và trao giấy chứng nhận kiểm định.", "desc_en": "Finalise records after the external assessment and award the accreditation certificate.", "per_program": false}], "milestones": [{"date": "2026-06-30", "vn": "Hoàn tất rà soát CTĐT theo Bộ tiêu chuẩn FIBAA", "en": "Programme review against FIBAA standards completed"}, {"date": "2026-08-30", "vn": "Hoàn tất bản thảo SER + CV giảng viên + minh chứng dịch thuật", "en": "SER draft + lecturer CVs + translated evidence completed"}, {"date": "2026-09-30", "vn": "Đăng ký kiểm định với FIBAA hoàn tất", "en": "FIBAA accreditation registration completed"}, {"date": "2026-11-30", "vn": "SER hoàn chỉnh, đầy đủ biểu mẫu & hồ sơ theo yêu cầu FIBAA", "en": "SER finalised with all FIBAA-required forms & records"}, {"date": "2027-05-30", "vn": "Đánh giá ngoài (ĐGN) hoàn tất (dự kiến)", "en": "External assessment completed (provisional)"}, {"date": "2027-08-15", "vn": "Nhận giấy chứng nhận kiểm định FIBAA", "en": "FIBAA accreditation certificate awarded"}], "org_units": [{"vn": "Phòng Khảo thí – Bảo đảm chất lượng giáo dục (KT-BĐCLGD)", "en": "Department of Educational Testing and Quality Assurance", "tasks_vn": ["Xây dựng và triển khai kế hoạch kiểm định chất lượng tại Trường", "Là đầu mối liên hệ với Chuyên gia tư vấn (nếu có)", "Phối hợp tổ chức tập huấn, tham gia các diễn đàn trao đổi do FIBAA tổ chức"], "tasks_en": ["Build and roll out the institution's quality-accreditation plan", "Act as the contact point with consultants (if any)", "Help organise training and FIBAA information forums"]}, {"vn": "Phòng Đối ngoại", "en": "Department of External Relations", "tasks_vn": ["Phối hợp liên hệ FIBAA: hợp đồng, phiên dịch các cuộc họp, đón đoàn ĐGN", "Phối hợp tổ chức hoạt động đánh giá ngoài, đón tiếp chuyên gia nước ngoài"], "tasks_en": ["Coordinate with FIBAA: contracts, meeting interpretation, hosting the assessment panel", "Help organise the external-assessment visit and host foreign experts"]}, {"vn": "Phòng Kế hoạch – Tài chính", "en": "Department of Planning and Finance", "tasks_vn": ["Phối hợp rà soát hợp đồng với FIBAA", "Thực hiện các thủ tục tài chính theo quy định"], "tasks_en": ["Help review the FIBAA contract", "Handle financial procedures per regulations"]}, {"vn": "Trung tâm Vận hành Cơ sở Vật chất", "en": "Center of Facilities Operations", "tasks_vn": ["Chuẩn bị cơ sở vật chất, trang thiết bị cho các buổi đánh giá tại Trường"], "tasks_en": ["Prepare facilities and equipment for on-site assessment sessions"]}, {"vn": "Trung tâm Truyền thông – Tổ chức sự kiện", "en": "Center of Communications - Event Management", "tasks_vn": ["Thiết kế ấn phẩm truyền thông (trước, trong, sau kiểm định)", "Hoàn thiện website tiếng Anh theo yêu cầu kiểm định", "Quay phim, chụp hình, lưu trữ tư liệu; truyền thông trong và ngoài Trường"], "tasks_en": ["Design communication materials (before/during/after accreditation)", "Finalise the English website required for accreditation", "Film/photograph and archive materials; internal & external communications"]}, {"vn": "Trung tâm Công nghệ thông tin – Dữ liệu", "en": "Center of Information Technology & Data", "tasks_vn": ["Rà soát đường truyền, cập nhật dữ liệu lên hệ thống lưu trữ", "Cài đặt link họp/đánh giá online; hỗ trợ kỹ thuật các buổi đánh giá tại Trường"], "tasks_en": ["Check network connectivity and update the data-storage system", "Set up online meeting/assessment links; provide technical support on-site"]}, {"vn": "Các đơn vị phụ trách CTĐT kiểm định", "en": "Units responsible for the accredited programmes", "tasks_vn": ["Lập kế hoạch chi tiết, phân công nhân sự phụ trách", "Rà soát, viết SER và lập danh mục minh chứng theo Bộ tiêu chuẩn FIBAA"], "tasks_en": ["Draft a detailed plan and assign responsible staff", "Review, write the SER and compile the evidence list per FIBAA standards"]}, {"vn": "Các đơn vị liên quan", "en": "Other related units", "tasks_vn": ["Cung cấp minh chứng trong phạm vi chức năng, nhiệm vụ của đơn vị", "Tham gia các hoạt động tự đánh giá, đánh giá ngoài theo kế hoạch của Trường"], "tasks_en": ["Provide evidence within the unit's function and remit", "Take part in self-assessment / external-assessment activities per the plan"]}]};
+</script>
+<script>
+(function(){
+  "use strict";
+
+  var state = {
+    activeView: 'overview',
+    lang: 'vi',           // 'vi' | 'en'
+    progress: {},        // institution-wide task id -> bool
+    progProgress: {},     // "T2_P1" -> bool  (per-programme task completion)
+    notes: {}            // task id -> [{id, ts, text}]
+  };
+
+  // L(vn, en) — return string for current language
+  function L(vn, en){ return state.lang === 'en' ? en : vn; }
+
+  var STORAGE_KEY = 'fibaa_tracker_progress_v1';
+  var DAY = 86400000;
+
+  /* ================= GOOGLE DRIVE SYNC =================
+     HƯỚNG DẪN CẤU HÌNH (xem chi tiết trong tin nhắn đi kèm):
+     1. Thay GOOGLE_CLIENT_ID bên dưới bằng Client ID lấy từ Google Cloud Console.
+     2. File HTML này phải được host ở một địa chỉ http(s) cố định (GitHub Pages,
+        Google Sites, v.v.) — không chạy được khi mở trực tiếp dạng file:// .
+     3. Địa chỉ host đó phải được khai báo trong "Authorized JavaScript origins"
+        của OAuth Client ID.
+  ======================================================= */
+  var GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com'; // <-- THAY Ở ĐÂY
+  var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  var DRIVE_FILE_NAME = 'fibaa_tracker_progress.json';
+
+  var drive = {
+    tokenClient: null,
+    accessToken: null,
+    email: null,
+    fileId: null,
+    ready: false,
+    saveTimer: null,
+    saving: false
+  };
+
+  function driveSetStatus(text, mode){
+    var el = document.getElementById('driveStatusText');
+    if(!el) return;
+    el.textContent = text;
+    el.classList.remove('is-synced','is-error');
+    if(mode) el.classList.add(mode);
+  }
+  function driveSetSyncTime(){
+    var el = document.getElementById('driveSyncTime');
+    if(!el) return;
+    el.textContent = L('Đồng bộ lúc ', 'Synced at ') + new Date().toLocaleTimeString(state.lang === 'en' ? 'en-US' : 'vi-VN');
+  }
+
+  function driveApiHeaders(extra){
+    var h = {'Authorization': 'Bearer ' + drive.accessToken};
+    if(extra) for(var k in extra) h[k] = extra[k];
+    return h;
+  }
+
+  function driveInit(){
+    if(typeof google === 'undefined' || !google.accounts || GOOGLE_CLIENT_ID.indexOf('YOUR_CLIENT_ID') === 0){
+      driveSetStatus(L('☁ Chưa cấu hình Google Drive (xem hướng dẫn)','☁ Google Drive not configured (see guide)'));
+      var btn = document.getElementById('btnDriveSignIn');
+      if(btn) btn.disabled = true;
+      return;
+    }
+    drive.tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      prompt: '',
+      callback: function(resp){
+        if(resp.error){
+          driveSetStatus(L('☁ Đăng nhập thất bại, thử lại','☁ Sign-in failed, try again'), 'is-error');
+          return;
+        }
+        drive.accessToken = resp.access_token;
+        afterDriveSignIn();
+      }
+    });
+    // Thử đăng nhập âm thầm nếu trước đó đã từng đồng ý (không hiện popup nếu trình duyệt cho phép)
+    if(localStorage.getItem('fibaa_drive_was_signed_in') === '1'){
+      try{ drive.tokenClient.requestAccessToken({prompt: ''}); }catch(e){}
+    }
+  }
+
+  function afterDriveSignIn(){
+    localStorage.setItem('fibaa_drive_was_signed_in', '1');
+    drive.ready = true;
+    document.getElementById('btnDriveSignIn').style.display = 'none';
+    document.getElementById('btnDriveSignOut').style.display = '';
+    driveSetStatus(L('☁ Đang kết nối Drive…','☁ Connecting to Drive…'));
+    fetch('https://www.googleapis.com/oauth2/v2/userinfo', {headers: driveApiHeaders()})
+      .then(function(r){ return r.json(); })
+      .then(function(info){
+        drive.email = info.email || null;
+        driveLoadFromDrive(true);
+      })
+      .catch(function(){ driveLoadFromDrive(true); });
+  }
+
+  function driveFindFile(){
+    var q = encodeURIComponent("name='" + DRIVE_FILE_NAME + "' and trashed=false");
+    return fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&spaces=drive&fields=files(id,name,modifiedTime)', {
+      headers: driveApiHeaders()
+    }).then(function(r){ return r.json(); }).then(function(data){
+      if(data.files && data.files.length){
+        drive.fileId = data.files[0].id;
+        return drive.fileId;
+      }
+      return null;
+    });
+  }
+
+  function driveDownloadFile(fileId){
+    return fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', {
+      headers: driveApiHeaders()
+    }).then(function(r){ return r.ok ? r.text() : null; });
+  }
+
+  function driveCreateFile(content){
+    var boundary = '-------fibaa' + Date.now();
+    var metadata = {name: DRIVE_FILE_NAME, mimeType: 'application/json'};
+    var body =
+      '--' + boundary + '\r\n' +
+      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+      JSON.stringify(metadata) + '\r\n' +
+      '--' + boundary + '\r\n' +
+      'Content-Type: application/json\r\n\r\n' +
+      content + '\r\n' +
+      '--' + boundary + '--';
+    return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: driveApiHeaders({'Content-Type': 'multipart/related; boundary=' + boundary}),
+      body: body
+    }).then(function(r){ return r.json(); }).then(function(data){
+      drive.fileId = data.id;
+      return data.id;
+    });
+  }
+
+  function driveUpdateFile(fileId, content){
+    return fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
+      method: 'PATCH',
+      headers: driveApiHeaders({'Content-Type': 'application/json'}),
+      body: content
+    });
+  }
+
+  function driveLoadFromDrive(isInitialLoad){
+    driveFindFile().then(function(fileId){
+      if(!fileId){
+        driveSetStatus(L('☁ Chưa có dữ liệu trên Drive — sẽ tạo mới khi lưu','☁ No data on Drive yet — will create on first save'), 'is-synced');
+        return;
+      }
+      return driveDownloadFile(fileId).then(function(text){
+        if(!text) return;
+        try{
+          var payload = JSON.parse(text);
+          if(isInitialLoad){
+            if(payload.progress) state.progress = payload.progress;
+            if(payload.progProgress) state.progProgress = payload.progProgress;
+            if(payload.notes) state.notes = payload.notes;
+            renderAll();
+          }
+          driveSetStatus(L('☁ Đã đồng bộ với Google Drive' + (drive.email ? ' (' + drive.email + ')' : ''),
+                           '☁ Synced with Google Drive' + (drive.email ? ' (' + drive.email + ')' : '')), 'is-synced');
+          driveSetSyncTime();
+        }catch(e){}
+      });
+    }).catch(function(){
+      driveSetStatus(L('☁ Lỗi kết nối Drive','☁ Drive connection error'), 'is-error');
+    });
+  }
+
+  function driveSaveNow(){
+    if(!drive.ready || !drive.accessToken) return;
+    if(drive.saving) return;
+    drive.saving = true;
+    var payload = {progress: state.progress, progProgress: state.progProgress, notes: state.notes,
+                   exportedAt: new Date().toISOString(), source: 'FIBAA Progress Tracker (HUFLIT)'};
+    var content = JSON.stringify(payload, null, 2);
+    var task = drive.fileId ? driveUpdateFile(drive.fileId, content) : driveCreateFile(content);
+    task.then(function(){
+      drive.saving = false;
+      driveSetStatus(L('☁ Đã lưu lên Google Drive' + (drive.email ? ' (' + drive.email + ')' : ''),
+                       '☁ Saved to Google Drive' + (drive.email ? ' (' + drive.email + ')' : '')), 'is-synced');
+      driveSetSyncTime();
+    }).catch(function(){
+      drive.saving = false;
+      driveSetStatus(L('☁ Lưu lên Drive thất bại','☁ Save to Drive failed'), 'is-error');
+    });
+  }
+
+  function driveScheduleSave(){
+    if(!drive.ready) return;
+    clearTimeout(drive.saveTimer);
+    drive.saveTimer = setTimeout(driveSaveNow, 1500); // gộp các thay đổi liên tiếp trong 1.5s
+  }
+
+  function driveSignOut(){
+    drive.ready = false;
+    drive.accessToken = null;
+    drive.email = null;
+    drive.fileId = null;
+    localStorage.removeItem('fibaa_drive_was_signed_in');
+    document.getElementById('btnDriveSignIn').style.display = '';
+    document.getElementById('btnDriveSignOut').style.display = 'none';
+    driveSetStatus(L('☁ Chưa đồng bộ Google Drive · Đã đăng xuất','☁ Not synced · Signed out'));
+    document.getElementById('driveSyncTime').textContent = '';
+  }
+  /* =============== END GOOGLE DRIVE SYNC =============== */
+
+
+  function esc(s){
+    if(s === undefined || s === null) return '';
+    return String(s).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+  function parseISO(s){
+    var p = s.split('-').map(Number);
+    return new Date(p[0], p[1]-1, p[2]);
+  }
+  function fmtDate(s){
+    var d = parseISO(s);
+    var dd = String(d.getDate()).padStart(2,'0');
+    var mm = String(d.getMonth()+1).padStart(2,'0');
+    return dd + '/' + mm + '/' + d.getFullYear();
+  }
+  function fmtMonthYear(s){
+    var d = parseISO(s);
+    return String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getFullYear()).slice(2);
+  }
+  function todayDate(){
+    var d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  function daysBetween(a, b){ return Math.round((b - a) / DAY); }
+
+  var TODAY = todayDate();
+  var T_START = parseISO(DATA.meta.timeline_start);
+  var T_END = parseISO(DATA.meta.timeline_end);
+  var TOTAL_DAYS = daysBetween(T_START, T_END);
+
+  function phaseInfo(id){
+    return DATA.phases.filter(function(p){ return p.id === id; })[0];
+  }
+  function programInfo(id){
+    return DATA.programs.filter(function(p){ return p.id === id; })[0];
+  }
+
+  /* ---------------- persistence ---------------- */
+  function tryStorageGet(){
+    if(typeof window.storage === 'undefined' || !window.storage.get) return Promise.resolve(null);
+    return window.storage.get(STORAGE_KEY, false).then(function(r){
+      return r && r.value ? r.value : null;
+    }).catch(function(){ return null; });
+  }
+  function tryStorageSet(payload){
+    if(typeof window.storage === 'undefined' || !window.storage.set) return;
+    try{ window.storage.set(STORAGE_KEY, JSON.stringify(payload), false).catch(function(){}); }catch(e){}
+  }
+  function persist(){
+    tryStorageSet({progress: state.progress, progProgress: state.progProgress, notes: state.notes, savedAt: new Date().toISOString()});
+    driveScheduleSave();
+  }
+  function loadInitial(){
+    tryStorageGet().then(function(raw){
+      if(!raw) return;
+      try{
+        var payload = JSON.parse(raw);
+        if(payload.progress) state.progress = payload.progress;
+        if(payload.progProgress) state.progProgress = payload.progProgress;
+        if(payload.notes) state.notes = payload.notes;
+        renderAll();
+      }catch(e){}
+    });
+  }
+
+  var toastTimer = null;
+  function showToast(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2400);
+  }
+
+  /* ---------------- task completion helpers ---------------- */
+  function progDoneCount(task){
+    var n = 0;
+    DATA.programs.forEach(function(p){ if(state.progProgress[task.id + '_' + p.id]) n++; });
+    return n;
+  }
+  function isTaskComplete(task){
+    if(task.per_program) return progDoneCount(task) === DATA.programs.length;
+    return !!state.progress[task.id];
+  }
+  function taskStatus(task){
+    if(isTaskComplete(task)) return 'done';
+    var end = parseISO(task.end);
+    var start = parseISO(task.start);
+    if(TODAY > end) return 'overdue';
+    if(TODAY >= start) return 'inprogress';
+    return 'upcoming';
+  }
+  function getStatusLabel(status){
+    var labels = {
+      done:       {primary: L('Hoàn thành','Done'),           secondary: L('Done','Hoàn thành')},
+      overdue:    {primary: L('Trễ hạn','Overdue'),           secondary: L('Overdue','Trễ hạn')},
+      inprogress: {primary: L('Đang triển khai','In progress'), secondary: L('In progress','Đang triển khai')},
+      upcoming:   {primary: L('Sắp tới','Upcoming'),           secondary: L('Upcoming','Sắp tới')}
+    };
+    return labels[status] || labels.upcoming;
+  }
+
+  function overallPercent(){
+    var sum = 0;
+    DATA.tasks.forEach(function(t){
+      if(t.per_program){ sum += progDoneCount(t) / DATA.programs.length; }
+      else { sum += isTaskComplete(t) ? 1 : 0; }
+    });
+    return Math.round((sum / DATA.tasks.length) * 100);
+  }
+  function doneTaskEquivalent(){
+    // for the headline "x / y" readout: count institution tasks done + per-programme sub-units done
+    var done = 0, total = 0;
+    DATA.tasks.forEach(function(t){
+      if(t.per_program){ total += DATA.programs.length; done += progDoneCount(t); }
+      else { total += 1; done += isTaskComplete(t) ? 1 : 0; }
+    });
+    return {done: done, total: total};
+  }
+
+  /* ---------------- nav ---------------- */
+  function renderNav(){
+    var nav = document.getElementById('tocNav');
+    var html = '';
+    html += navLink('overview', '·', L('Tổng quan','Overview'), L('Tổng quan','Overview'));
+    html += navLink('timeline', '\u2630', L('Dòng thời gian (Gantt)','Timeline (Gantt)'), L('Dòng thời gian','Timeline'));
+    html += navLink('tasks', '\u2713', L('Công việc','Tasks'), L('Công việc','Tasks'), taskDoneShort());
+    html += navLink('byprogram', '\u2630', L('Theo CTĐT','By Programme'), L('Theo CTĐT','By Programme'));
+    html += navLink('orgunits', '\u25A4', L('Đơn vị phụ trách','Responsible Units'), L('Đơn vị phụ trách','Responsible Units'));
+    nav.innerHTML = html;
+    Array.prototype.forEach.call(nav.querySelectorAll('a'), function(a){
+      a.addEventListener('click', function(e){
+        e.preventDefault();
+        state.activeView = a.getAttribute('data-view');
+        renderAll();
+        window.scrollTo({top:0, behavior:'smooth'});
+      });
+    });
+  }
+  function taskDoneShort(){
+    var n = 0;
+    DATA.tasks.forEach(function(t){ if(isTaskComplete(t)) n++; });
+    return n + '/' + DATA.tasks.length;
+  }
+  function navLink(viewId, num, vnTitle, enTitle, cnt){
+    var active = (state.activeView === viewId) ? ' active' : '';
+    return '<a href="#" class="' + active + '" data-view="' + viewId + '" title="' + esc(enTitle) + '">' +
+      '<span class="num">' + esc(num) + '</span><span>' + esc(vnTitle) + '</span>' +
+      (cnt ? '<span class="cnt">' + esc(cnt) + '</span>' : '') + '</a>';
+  }
+
+  /* ---------------- header / chips / progress ---------------- */
+  function renderHeader(){
+    document.getElementById('planTitle').innerHTML =
+      esc(L(DATA.meta.plan_title_vn, DATA.meta.plan_title_en)) +
+      '<span class="vn">' + esc(L(DATA.meta.plan_subtitle_vn, DATA.meta.plan_subtitle_en)) + '</span>';
+    document.getElementById('btnLangVI').classList.toggle('active', state.lang === 'vi');
+    document.getElementById('btnLangEN').classList.toggle('active', state.lang === 'en');
+    document.getElementById('langLabel').textContent = state.lang === 'vi' ? 'Ngôn ngữ hiển thị · Display language' : 'Display language · Ngôn ngữ';
+  }
+  function nextMilestone(){
+    var future = DATA.milestones.filter(function(m){ return parseISO(m.date) >= TODAY; });
+    return future.length ? future[0] : null;
+  }
+  function renderChips(){
+    var root = document.getElementById('chipsRow');
+    var html = '';
+    var nm = nextMilestone();
+    if(nm){
+      var d = daysBetween(TODAY, parseISO(nm.date));
+      html += chipCard(L('Mốc tiếp theo','Next milestone'), d, L('ngày','days'), L(nm.vn, nm.en), d <= 14);
+    }
+    var finalD = daysBetween(TODAY, T_END);
+    html += chipCard(L('Hạn hoàn tất kế hoạch','Plan deadline'), finalD, L('ngày','days'), fmtDate(DATA.meta.timeline_end) + ' — ' + L('nhận chứng nhận','certificate awarded'), finalD <= 30);
+    var overdueCount = DATA.tasks.filter(function(t){ return taskStatus(t) === 'overdue'; }).length;
+    html += chipCard(L('Công việc trễ hạn','Overdue tasks'), overdueCount, L('việc','tasks'), overdueCount ? L('Cần xử lý ngay','Needs immediate attention') : L('Không có việc trễ hạn','No overdue tasks'), overdueCount > 0);
+    var inprogCount = DATA.tasks.filter(function(t){ return taskStatus(t) === 'inprogress'; }).length;
+    html += chipCard(L('Đang triển khai','In progress'), inprogCount, L('việc','tasks'), L('Theo ngày hôm nay: ','As of today: ') + fmtDate(isoToday()), false);
+    root.innerHTML = html;
+  }
+  function isoToday(){
+    return TODAY.getFullYear() + '-' + String(TODAY.getMonth()+1).padStart(2,'0') + '-' + String(TODAY.getDate()).padStart(2,'0');
+  }
+  function chipCard(label, num, unit, sub, urgent){
+    return '<div class="chip-card' + (urgent ? ' urgent' : '') + '"><span class="cc-label">' + esc(label) + '</span>' +
+      '<div class="cc-num">' + esc(num) + ' <span>' + esc(unit) + '</span></div>' +
+      '<div class="cc-sub">' + esc(sub) + '</div></div>';
+  }
+  function renderProgress(){
+    var r = doneTaskEquivalent();
+    document.getElementById('progressDone').textContent = r.done;
+    document.getElementById('progressTotal').textContent = r.total;
+    var milLabel = document.getElementById('progressMilestoneLabel');
+    if(milLabel) milLabel.innerHTML = '/<span id="progressTotal">' + r.total + '</span> ' + L('mốc công việc xong','tasks done');
+    var pct = overallPercent();
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = pct + L('% kế hoạch hoàn thành','% of plan complete');
+  }
+
+  /* ---------------- overview view ---------------- */
+  function renderOverview(){
+    var html = '<section class="view active" id="view-overview">';
+    html += '<div class="section-card"><h2>' + esc(L(DATA.meta.plan_title_vn, DATA.meta.plan_title_en)) +
+            '<span class="vn">' + esc(L(DATA.meta.plan_title_en, DATA.meta.plan_title_vn)) + '</span></h2>' +
+            '<p class="desc">' + esc(L(DATA.meta.plan_subtitle_vn, DATA.meta.plan_subtitle_en)) + '<br><em>' + esc(L(DATA.meta.plan_subtitle_en, DATA.meta.plan_subtitle_vn)) + '</em></p>' +
+            '<p class="desc"><b>' + esc(DATA.meta.window_en) + '</b><br>' + esc(DATA.meta.window_vn) + '</p></div>';
+
+    html += '<div class="section-card"><h2>' + L('Các giai đoạn','Phases') + ' <span class="vn">' + L('Phases','Các giai đoạn') + '</span></h2><div class="org-grid">';
+    DATA.phases.forEach(function(ph){
+      var tks = DATA.tasks.filter(function(t){ return t.phase === ph.id; });
+      var starts = tks.map(function(t){ return parseISO(t.start); });
+      var ends = tks.map(function(t){ return parseISO(t.end); });
+      var minS = new Date(Math.min.apply(null, starts));
+      var maxE = new Date(Math.max.apply(null, ends));
+      var doneN = tks.filter(isTaskComplete).length;
+      html += '<div class="org-card" style="border-left:4px solid ' + ph.color + ';">' +
+              '<h3>' + esc(L(ph.name_vn, ph.name_en)) + '</h3><div class="en">' + esc(L(ph.name_en, ph.name_vn)) + '</div>' +
+              '<div class="desc" style="margin:0;">' + fmtDate(isoOf(minS)) + ' \u2192 ' + fmtDate(isoOf(maxE)) +
+              ' &nbsp;\u00b7&nbsp; ' + doneN + '/' + tks.length + ' ' + L('công việc xong','tasks done') + '</div></div>';
+    });
+    html += '</div></div>';
+
+    html += '<div class="section-card"><h2>' + L('Các mốc quan trọng','Key Milestones') + ' <span class="vn">' + L('Milestones','Mốc quan trọng') + '</span></h2><div class="milestone-list">';
+    DATA.milestones.forEach(function(m){
+      var md = parseISO(m.date);
+      var cls = md < TODAY ? 'is-past' : (nextMilestone() && nextMilestone().date === m.date ? 'is-next' : '');
+      html += '<div class="milestone-item ' + cls + '"><div class="milestone-dot"></div>' +
+              '<div class="milestone-date">' + fmtDate(m.date) + '</div>' +
+              '<div class="milestone-text">' + esc(L(m.vn, m.en)) + '<div class="vn2">' + esc(L(m.en, m.vn)) + '</div></div></div>';
+    });
+    html += '</div></div>';
+
+    html += '</section>';
+    return html;
+  }
+  function isoOf(d){
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  /* ---------------- gantt view ---------------- */
+  function pctOf(dateObj){
+    var v = daysBetween(T_START, dateObj) / TOTAL_DAYS * 100;
+    return Math.max(0, Math.min(100, v));
+  }
+  function renderTimeline(){
+    var html = '<section class="view active" id="view-timeline">';
+    html += '<div class="section-card"><h2>' + L('Dòng thời gian triển khai (Gantt)','Implementation Timeline (Gantt)') + ' <span class="vn">' + L('Timeline','Dòng thời gian') + '</span></h2>';
+    html += '<div class="gantt-scroll"><div class="gantt">';
+
+    html += '<div class="gantt-months"><div class="gantt-corner">' + L('CTĐT · Task','Task · CTĐT') + '</div>';
+    var cursor = new Date(T_START.getFullYear(), T_START.getMonth(), 1);
+    while(cursor <= T_END){
+      var monthStart = new Date(Math.max(cursor, T_START));
+      var monthEndRaw = new Date(cursor.getFullYear(), cursor.getMonth()+1, 0);
+      var monthEnd = new Date(Math.min(monthEndRaw, T_END));
+      var days = daysBetween(monthStart, monthEnd) + 1;
+      var widthPct = Math.max(0, days / TOTAL_DAYS * 100);
+      html += '<div class="gantt-month" style="flex:0 0 ' + widthPct + '%; max-width:' + widthPct + '%;">' +
+              fmtMonthYear(isoOf(cursor)) + '</div>';
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
+    }
+    html += '</div>';
+
+    html += '<div class="gantt-body" id="ganttBody">';
+    DATA.tasks.forEach(function(t){
+      var ph = phaseInfo(t.phase);
+      var status = taskStatus(t);
+      var left = pctOf(parseISO(t.start));
+      var right = pctOf(parseISO(t.end));
+      var width = Math.max(1.2, right - left);
+      html += '<div class="gantt-row">' +
+              '<div class="gantt-row-label"><b>' + esc(t.id) + '</b>' + esc(L(t.lead_vn, t.lead_en)) + '</div>' +
+              '<div class="gantt-track">' +
+              '<div class="gantt-bar status-' + status + '" style="left:' + left.toFixed(2) + '%; width:' + width.toFixed(2) + '%; background:' + ph.color + ';" title="' + esc(t.id + ' \u2014 ' + L(t.desc_vn, t.desc_en) + ' (' + fmtDate(t.start) + ' \u2192 ' + fmtDate(t.end) + ')') + '" data-jump-task="' + esc(t.id) + '">' +
+              esc(t.id) +
+              '</div></div></div>';
+    });
+    html += '</div>';
+    html += '</div></div>';
+
+    html += '<div class="legend-row">';
+    DATA.phases.forEach(function(ph){
+      html += '<span><span class="legend-dot" style="background:' + ph.color + ';"></span>' + esc(ph.id) + ' \u2014 ' + esc(L(ph.name_vn, ph.name_en)) + '</span>';
+    });
+    html += '<span><span class="legend-dot" style="background:var(--red);"></span>' + L('Hôm nay','Today') + ' (' + fmtDate(isoToday()) + ')</span>';
+    html += '<span><span class="legend-dot" style="background:var(--gold); border-radius:0; transform:rotate(45deg);"></span>' + L('Mốc quan trọng','Milestone') + '</span>';
+    html += '</div>';
+    html += '</div></section>';
+    return html;
+  }
+  function overlayGantt(){
+    var body = document.getElementById('ganttBody');
+    if(!body) return;
+    var LABEL_W = 168;
+    function place(){
+      // clear previous overlays
+      Array.prototype.forEach.call(body.querySelectorAll('.gantt-overlay'), function(el){ el.remove(); });
+      var bodyWidth = body.getBoundingClientRect().width;
+      var trackWidth = Math.max(1, bodyWidth - LABEL_W);
+      function leftPx(pct){ return LABEL_W + (pct/100) * trackWidth; }
+
+      var todayLeft = pctOf(TODAY);
+      var line = document.createElement('div');
+      line.className = 'gantt-today-line gantt-overlay';
+      line.style.left = leftPx(todayLeft) + 'px';
+      line.title = 'Hôm nay · Today: ' + fmtDate(isoToday());
+      body.appendChild(line);
+      DATA.milestones.forEach(function(m){
+        var left = pctOf(parseISO(m.date));
+        var tri = document.createElement('div');
+        tri.className = 'gantt-milestone gantt-overlay';
+        tri.style.left = leftPx(left) + 'px';
+        tri.title = fmtDate(m.date) + ' \u2014 ' + m.vn;
+        body.appendChild(tri);
+      });
+
+      // opaque mask that tracks horizontal scroll, covering the sticky label
+      // column so the today-line / milestone markers never bleed into it
+      var mask = document.createElement('div');
+      mask.className = 'gantt-label-mask gantt-overlay';
+      body.appendChild(mask);
+      var scrollEl = body.closest('.gantt-scroll');
+      function syncMask(){ mask.style.left = (scrollEl ? scrollEl.scrollLeft : 0) + 'px'; }
+      syncMask();
+      if(scrollEl) scrollEl.addEventListener('scroll', syncMask);
+    }
+    place();
+    window.addEventListener('resize', place);
+  }
+
+  /* ---------------- tasks view ---------------- */
+  function renderTaskCard(t, openState){
+    var ph = phaseInfo(t.phase);
+    var status = taskStatus(t);
+    var sl = getStatusLabel(status);
+    var open = openState ? ' open' : '';
+    var done = isTaskComplete(t);
+    var html = '<div class="task' + (done ? ' is-done' : '') + (status === 'overdue' ? ' is-overdue' : '') + open + '" data-task="' + esc(t.id) + '">';
+    html += '<div class="task-head" data-toggle="1">';
+    html += '<div class="task-code" style="background:' + ph.color + ';">' + esc(t.id) + '</div>';
+    html += '<div class="task-titles">';
+    html += '<div class="task-title-vn">' + esc(L(t.desc_vn, t.desc_en).split('.')[0]) + '.</div>';
+    html += '<div class="task-title-en">' + esc(L(t.desc_en, t.desc_vn).split('.')[0]) + '.</div>';
+    html += '<div class="task-meta">' +
+            '<span class="meta-chip">' + fmtDate(t.start) + ' \u2192 ' + fmtDate(t.end) + '</span>' +
+            '<span class="meta-chip">' + esc(L(t.lead_vn, t.lead_en)) + '</span>' +
+            '</div></div>';
+    html += '<span class="status-badge status-' + status + '">' + esc(sl.primary) + '</span>';
+    if(!t.per_program){
+      html += '<div class="task-check"><input type="checkbox" id="tchk-' + esc(t.id) + '" ' + (done ? 'checked' : '') + '>' +
+              '<label for="tchk-' + esc(t.id) + '">' + L('Hoàn thành','Done') + '<br>' + L('Done','Hoàn thành') + '</label></div>';
+    }
+    html += '<div class="chev">\u276F</div>';
+    html += '</div>'; // task-head
+
+    html += '<div class="task-body">';
+    html += '<div class="task-desc"><div class="en">' + esc(L(t.desc_vn, t.desc_en)) + '</div><div class="vn">' + esc(L(t.desc_en, t.desc_vn)) + '</div></div>';
+    html += '<div class="task-meta" style="margin-bottom:10px;">' +
+            '<span class="meta-chip">' + L('Phụ trách','Lead') + ': ' + esc(L(t.lead_vn, t.lead_en)) + '</span>' +
+            '<span class="meta-chip">' + L('Phối hợp','Collab') + ': ' + esc(L(t.collab_vn, t.collab_en)) + '</span></div>';
+
+    if(t.per_program){
+      var doneN = progDoneCount(t);
+      html += '<div class="per-prog"><span class="per-prog-label">' + L('Tiến độ theo CTĐT','By programme') + ' (' + doneN + '/' + DATA.programs.length + ')</span>';
+      html += '<div class="prog-grid">';
+      DATA.programs.forEach(function(p){
+        var key = t.id + '_' + p.id;
+        var checked = !!state.progProgress[key];
+        html += '<label class="prog-item"><input type="checkbox" data-prog-chk="' + esc(key) + '" ' + (checked ? 'checked' : '') + '> ' +
+                '<span>' + esc(L(p.level, p.level_en)) + ' \u2014 ' + esc(L(p.name_vn, p.name_en)) + '</span></label>';
+      });
+      html += '</div></div>';
+    }
+
+    // Notes section
+    var taskNotes = state.notes[t.id] || [];
+    html += '<div class="task-notes" data-notes-task="' + esc(t.id) + '">';
+    html += '<div class="notes-header"><span class="notes-title">' + L('Ghi chú','Notes') + ' (' + taskNotes.length + ')</span>';
+    html += '<button class="btn-add-note" data-add-note="' + esc(t.id) + '">+ ' + L('Thêm ghi chú','Add note') + '</button></div>';
+    html += '<div class="notes-list" id="notes-list-' + esc(t.id) + '">';
+    taskNotes.forEach(function(n){
+      html += '<div class="note-item" data-note-id="' + esc(n.id) + '">' +
+              '<span class="note-ts">' + esc(n.ts) + '</span>' +
+              '<div class="note-text">' + esc(n.text) + '</div>' +
+              '<button class="btn-del-note" data-del-note="' + esc(t.id) + '" data-del-note-id="' + esc(n.id) + '" title="' + L('Xoá ghi chú','Delete note') + '">&times;</button>' +
+              '</div>';
+    });
+    html += '</div>';
+    html += '<div class="note-input-row" id="note-input-' + esc(t.id) + '" style="display:none;">' +
+            '<textarea placeholder="' + L('Nhập ghi chú...','Enter note...') + '"></textarea>' +
+            '<button class="btn-save-note" data-save-note="' + esc(t.id) + '">' + L('Lưu','Save') + '</button>' +
+            '<button class="btn-cancel-note" data-cancel-note="' + esc(t.id) + '">' + L('Huỷ','Cancel') + '</button>' +
+            '</div>';
+    html += '</div>'; // task-notes
+
+    html += '</div>'; // task-body
+    html += '</div>'; // task
+    return html;
+  }
+  function renderTasks(){
+    var html = '<section class="view active" id="view-tasks">';
+    html += '<div class="section-card"><h2>' + L('Danh sách công việc theo kế hoạch','Task List by Plan') + ' <span class="vn">' + L('Tasks','Công việc') + '</span></h2>';
+    DATA.phases.forEach(function(ph){
+      var tks = DATA.tasks.filter(function(t){ return t.phase === ph.id; });
+      html += '<div class="subsection-head" style="border-left:3px solid ' + ph.color + '; padding-left:10px; margin:18px 0 10px; font-weight:700; font-size:14.5px; color:' + ph.color + ';">' +
+              esc(L(ph.name_vn, ph.name_en)) + '<div style="font-size:12px; font-weight:400; font-style:italic; color:var(--muted);">' + esc(L(ph.name_en, ph.name_vn)) + '</div></div>';
+      tks.forEach(function(t){ html += renderTaskCard(t, false); });
+    });
+    html += '</div></section>';
+    return html;
+  }
+
+  /* ---------------- by-programme matrix ---------------- */
+  function renderByProgram(){
+    var perTasks = DATA.tasks.filter(function(t){ return t.per_program; });
+    var html = '<section class="view active" id="view-byprogram">';
+    html += '<div class="section-card"><h2>' + L('Tiến độ theo từng chương trình đào tạo','Progress by Programme') + ' <span class="vn">' + L('By programme','Theo CTĐT') + '</span></h2>';
+    html += '<p class="desc">' + L('Các công việc do Khoa/Bộ môn chủ trì, cần thực hiện riêng cho từng CTĐT.','Tasks led by faculties/departments that must be completed separately for each programme.') + '<br><em>' + L('Tasks led by faculties/departments that must be completed separately for each programme.','Các công việc do Khoa/Bộ môn chủ trì, cần thực hiện riêng cho từng CTĐT.') + '</em></p>';
+    html += '<table class="matrix-table"><thead><tr><th>' + L('CTĐT','Programme') + '</th>';
+    perTasks.forEach(function(t){ html += '<th>' + esc(t.id) + '<br><span style="font-weight:400;">' + esc(L(t.desc_vn, t.desc_en).split(',')[0].split('.')[0]) + '</span></th>'; });
+    html += '<th>% ' + L('Hoàn thành','Complete') + '</th></tr></thead><tbody>';
+    DATA.programs.forEach(function(p){
+      html += '<tr><td><span class="matrix-name">' + esc(L(p.level, p.level_en)) + ' \u2014 ' + esc(L(p.name_vn, p.name_en)) + '</span>' +
+              '<span class="matrix-sub">' + esc(L(p.unit_vn, p.unit_en)) + '</span></td>';
+      var doneN = 0;
+      perTasks.forEach(function(t){
+        var key = t.id + '_' + p.id;
+        var checked = !!state.progProgress[key];
+        if(checked) doneN++;
+        html += '<td><input type="checkbox" data-prog-chk2="' + esc(key) + '" ' + (checked ? 'checked' : '') + '></td>';
+      });
+      var pct = Math.round(doneN / perTasks.length * 100);
+      html += '<td class="matrix-pct' + (pct === 100 ? ' full' : '') + '">' + pct + '%</td></tr>';
+    });
+    html += '</tbody></table></div></section>';
+    return html;
+  }
+
+  /* ---------------- org units ---------------- */
+  function renderOrgUnits(){
+    var html = '<section class="view active" id="view-orgunits">';
+    html += '<div class="section-card"><h2>' + L('Tổ chức thực hiện — đơn vị phụ trách','Responsible Units') + ' <span class="vn">' + L('Responsible units','Đơn vị phụ trách') + '</span></h2>';
+    html += '<div class="org-grid">';
+    DATA.org_units.forEach(function(u){
+      html += '<div class="org-card"><h3>' + esc(L(u.vn, u.en)) + '</h3><div class="en">' + esc(L(u.en, u.vn)) + '</div><ul>';
+      var primaryTasks = L('vn','en') === 'vn' ? u.tasks_vn : u.tasks_en;
+      var secondaryTasks = L('vn','en') === 'vn' ? u.tasks_en : u.tasks_vn;
+      primaryTasks.forEach(function(tx, i){
+        html += '<li>' + esc(tx) + '<span class="en2">' + esc(secondaryTasks[i] || '') + '</span></li>';
+      });
+      html += '</ul></div>';
+    });
+    html += '</div></div></section>';
+    return html;
+  }
+
+  /* ---------------- master render ---------------- */
+  function renderAll(){
+    renderHeader();
+    renderNav();
+    renderChips();
+    renderProgress();
+    var root = document.getElementById('viewRoot');
+    var html = '';
+    if(state.activeView === 'overview') html = renderOverview();
+    else if(state.activeView === 'timeline') html = renderTimeline();
+    else if(state.activeView === 'tasks') html = renderTasks();
+    else if(state.activeView === 'byprogram') html = renderByProgram();
+    else if(state.activeView === 'orgunits') html = renderOrgUnits();
+    else html = renderOverview();
+    root.innerHTML = html;
+    bindViewEvents(root);
+    if(state.activeView === 'timeline') overlayGantt();
+  }
+
+  function bindViewEvents(root){
+    Array.prototype.forEach.call(root.querySelectorAll('.task-head'), function(head){
+      head.addEventListener('click', function(e){
+        if(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL')) return;
+        head.parentElement.classList.toggle('open');
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('.task-check input'), function(inp){
+      inp.addEventListener('click', function(e){ e.stopPropagation(); });
+      inp.addEventListener('change', function(){
+        var id = inp.closest('.task').getAttribute('data-task');
+        state.progress[id] = inp.checked;
+        persist();
+        renderAll();
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-prog-chk]'), function(inp){
+      inp.addEventListener('change', function(){
+        var key = inp.getAttribute('data-prog-chk');
+        state.progProgress[key] = inp.checked;
+        persist();
+        renderAll();
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-prog-chk2]'), function(inp){
+      inp.addEventListener('change', function(){
+        var key = inp.getAttribute('data-prog-chk2');
+        state.progProgress[key] = inp.checked;
+        persist();
+        renderAll();
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-jump-task]'), function(bar){
+      bar.addEventListener('click', function(){
+        var id = bar.getAttribute('data-jump-task');
+        state.activeView = 'tasks';
+        renderAll();
+        setTimeout(function(){
+          var card = document.querySelector('.task[data-task="' + id + '"]');
+          if(card){ card.classList.add('open'); card.scrollIntoView({behavior:'smooth', block:'center'}); }
+        }, 60);
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-add-note]'), function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var tid = btn.getAttribute('data-add-note');
+        var row = document.getElementById('note-input-' + tid);
+        if(row){ row.style.display = 'flex'; row.querySelector('textarea').focus(); }
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-cancel-note]'), function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var tid = btn.getAttribute('data-cancel-note');
+        var row = document.getElementById('note-input-' + tid);
+        if(row){ row.style.display = 'none'; row.querySelector('textarea').value = ''; }
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-save-note]'), function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var tid = btn.getAttribute('data-save-note');
+        var row = document.getElementById('note-input-' + tid);
+        if(!row) return;
+        var text = row.querySelector('textarea').value.trim();
+        if(!text) return;
+        if(!state.notes[tid]) state.notes[tid] = [];
+        var now = new Date();
+        var ts = now.toLocaleDateString('vi-VN') + ' ' + now.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+        state.notes[tid].push({id: 'n' + Date.now(), ts: ts, text: text});
+        persist();
+        renderAll();
+        setTimeout(function(){
+          var card = document.querySelector('.task[data-task="' + tid + '"]');
+          if(card){ card.classList.add('open'); }
+        }, 50);
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-del-note]'), function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var tid = btn.getAttribute('data-del-note');
+        var nid = btn.getAttribute('data-del-note-id');
+        if(!state.notes[tid]) return;
+        state.notes[tid] = state.notes[tid].filter(function(n){ return n.id !== nid; });
+        persist();
+        renderAll();
+        setTimeout(function(){
+          var card = document.querySelector('.task[data-task="' + tid + '"]');
+          if(card){ card.classList.add('open'); }
+        }, 50);
+      });
+    });
+  }
+
+  function bindTopControls(){
+    document.getElementById('btnExpandAll').addEventListener('click', function(){
+      Array.prototype.forEach.call(document.querySelectorAll('.task'), function(el){ el.classList.add('open'); });
+    });
+    document.getElementById('btnCollapseAll').addEventListener('click', function(){
+      Array.prototype.forEach.call(document.querySelectorAll('.task'), function(el){ el.classList.remove('open'); });
+    });
+    document.getElementById('btnPrint').addEventListener('click', function(){ window.print(); });
+
+    // Language toggle
+    document.getElementById('btnLangVI').addEventListener('click', function(){
+      state.lang = 'vi';
+      updateSidebarLabels();
+      renderAll();
+    });
+    document.getElementById('btnLangEN').addEventListener('click', function(){
+      state.lang = 'en';
+      updateSidebarLabels();
+      renderAll();
+    });
+
+    function updateSidebarLabels(){
+      document.getElementById('btnExpandAll').textContent = L('Mở rộng tất cả','Expand all');
+      document.getElementById('btnCollapseAll').textContent = L('Thu gọn tất cả','Collapse all');
+      document.getElementById('btnExport').textContent = L('⬇ Xuất tiến độ','⬇ Export progress');
+      document.getElementById('btnImport').textContent = L('⬆ Nhập tiến độ','⬆ Import progress');
+      document.getElementById('btnPrint').textContent = L('🖶 In / Lưu PDF','🖶 Print / Save PDF');
+      document.getElementById('langLabel').textContent = L('Ngôn ngữ hiển thị · Display language','Display language · Ngôn ngữ');
+      document.getElementById('btnLangVI').classList.toggle('active', state.lang === 'vi');
+      document.getElementById('btnLangEN').classList.toggle('active', state.lang === 'en');
+      var sideNote = document.querySelector('.side-note');
+      if(sideNote) sideNote.textContent = L(
+        'Trạng thái "Đang triển khai/Trễ hạn" được tính tự động theo ngày hôm nay. Tích "Hoàn thành" khi công việc đã xong. Dùng "Xuất tiến độ" để lưu và chia sẻ với các đơn vị khác.',
+        '"In progress / Overdue" status is auto-calculated from today\'s date. Tick "Done" when a task is complete. Use "Export progress" to save and share with other units.'
+      );
+      document.getElementById('btnClose').textContent = L('⏻ Đóng · Close','⏻ Close · Đóng');
+      document.getElementById('closeExportYes').textContent = L('⬇ Có, xuất dữ liệu','⬇ Yes, export');
+      document.getElementById('closeExportNo').textContent = L('Không, đóng luôn · Close now','Close now · Không, đóng luôn');
+      document.getElementById('closeModalTitle').innerHTML = L(
+        'Xuất dữ liệu trước khi đóng?<br><span style="font-size:14px;font-weight:400;color:var(--muted);">Export data before closing?</span>',
+        'Export data before closing?<br><span style="font-size:14px;font-weight:400;color:var(--muted);">Xuất dữ liệu trước khi đóng?</span>'
+      );
+      document.getElementById('closeModalBody').innerHTML = L(
+        'Có muốn xuất file tiến độ (JSON, gồm cả ghi chú) trước khi đóng không?<br><em>Export the progress file (JSON, including notes) before closing?</em>',
+        'Export the progress file (JSON, including notes) before closing?<br><em>Có muốn xuất file tiến độ (JSON, gồm cả ghi chú) trước khi đóng không?</em>'
+      );
+      if(exitModal){
+        exitModal.querySelector('h3').innerHTML = L(
+          'Xuất dữ liệu trước khi thoát?<br><span style="font-size:14px;font-weight:400;color:var(--muted);">Export data before leaving?</span>',
+          'Export data before leaving?<br><span style="font-size:14px;font-weight:400;color:var(--muted);">Xuất dữ liệu trước khi thoát?</span>'
+        );
+        exitModal.querySelector('p').innerHTML = L(
+          'Bạn có muốn xuất file tiến độ (JSON) trước khi đóng trang không?<br><em>Would you like to export the progress file before closing?</em>',
+          'Would you like to export the progress file (JSON) before closing?<br><em>Bạn có muốn xuất file tiến độ trước khi đóng trang không?</em>'
+        );
+        document.getElementById('exitExportYes').textContent = L('⬇ Có, xuất file','⬇ Yes, export');
+        document.getElementById('exitExportNo').textContent = L('Không · No','No · Không');
+      }
+    }
+
+    document.getElementById('btnExport').addEventListener('click', function(){
+      doExport();
+    });
+
+    function doExport(){
+      var payload = {progress: state.progress, progProgress: state.progProgress, notes: state.notes, exportedAt: new Date().toISOString(), source: 'FIBAA Progress Tracker (HUFLIT)'};
+      var blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = 'fibaa_tracker_progress_' + new Date().toISOString().slice(0,10) + '.json';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(L('Đã xuất file tiến độ','Progress exported'));
+    }
+
+    // Exit modal
+    var exitHandled = false;
+    window.addEventListener('beforeunload', function(e){
+      if(exitHandled) return;
+      e.preventDefault();
+      e.returnValue = '';
+      document.getElementById('exitModal').style.display = 'flex';
+    });
+    document.getElementById('exitExportYes').addEventListener('click', function(){
+      exitHandled = true;
+      document.getElementById('exitModal').style.display = 'none';
+      doExport();
+      setTimeout(function(){ window.close(); }, 800);
+    });
+    document.getElementById('exitExportNo').addEventListener('click', function(){
+      exitHandled = true;
+      document.getElementById('exitModal').style.display = 'none';
+      window.close();
+    });
+    document.getElementById('btnImport').addEventListener('click', function(){ document.getElementById('fileImport').click(); });
+    document.getElementById('fileImport').addEventListener('change', function(e){
+      var file = e.target.files[0];
+      if(!file) return;
+      var reader = new FileReader();
+      reader.onload = function(){
+        try{
+          var payload = JSON.parse(reader.result);
+          if(payload.progress) state.progress = Object.assign({}, state.progress, payload.progress);
+          if(payload.progProgress) state.progProgress = Object.assign({}, state.progProgress, payload.progProgress);
+          if(payload.notes) state.notes = Object.assign({}, state.notes, payload.notes);
+          persist();
+          renderAll();
+          showToast(L('Đã nhập tiến độ thành công','Progress imported successfully'));
+        }catch(err){ showToast(L('File không hợp lệ','Invalid file')); }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+
+    // Close button — shows export-before-close dialog
+    document.getElementById('btnClose').addEventListener('click', function(){
+      document.getElementById('closeModal').style.display = 'flex';
+    });
+    document.getElementById('closeExportYes').addEventListener('click', function(){
+      document.getElementById('closeModal').style.display = 'none';
+      doExport();
+      setTimeout(function(){ window.close(); }, 800);
+    });
+    document.getElementById('closeExportNo').addEventListener('click', function(){
+      document.getElementById('closeModal').style.display = 'none';
+      window.close();
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    bindTopControls();
+    renderAll();
+    loadInitial();
+    document.getElementById('btnDriveSignIn').addEventListener('click', function(){
+      if(drive.tokenClient) drive.tokenClient.requestAccessToken({prompt: 'consent'});
+    });
+    document.getElementById('btnDriveSignOut').addEventListener('click', driveSignOut);
+    driveInit();
+  });
+})();
+
+</script>
+</body>
+</html>
