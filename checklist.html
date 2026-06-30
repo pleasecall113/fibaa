@@ -1768,6 +1768,7 @@ function tryStorageGet2(key){
 state.checker = {
   doc: null,          // {name, text, chars, importedAt}
   issues: [],         // array of issue objects
+  fmtIssues: [],      // format check results (line spacing, font)
   running: false,
   filter: 'all',      // 'all'|'spelling'|'grammar'|'style'|'fibaa'
   mode: 'file',       // 'file'|'paste'
@@ -2506,11 +2507,18 @@ function renderCheckerView(){
   if(state.checker.issues&&state.checker.issues.length){
     html += renderCheckerResults();
   } else if(state.checker.ran){
+    /* Show format check panel even when no writing issues */
+    if((state.checker.fmtIssues||[]).length){
+      html += renderFormatPanel();
+    }
     html += '<div class="an-upload" style="margin-top:16px;background:var(--green-bg);border-color:#BFE0CC;">';
     html += '<div style="font-size:22px;">✅</div>';
     html += '<div style="font-size:14px;color:var(--green);font-weight:700;margin-top:6px;">';
     html += '<span class="i18n-en">No issues detected in this text sample.</span>';
     html += '<span class="i18n-vn">Không phát hiện lỗi nào trong đoạn văn này.</span></div></div>';
+  } else if((state.checker.fmtIssues||[]).length && state.checker.doc){
+    /* File loaded, not yet run — show format result immediately */
+    html += renderFormatPanel();
   }
 
   html += '</section>';
@@ -2553,13 +2561,43 @@ function fmtChars2(n){
   return String(n);
 }
 
+function renderFormatPanel(){
+  var fmtIssues = state.checker.fmtIssues || [];
+  if(!fmtIssues.length) return '';
+  var allOk = fmtIssues.every(function(f){ return f.severity === 'ok'; });
+  var hasWarn = fmtIssues.some(function(f){ return f.severity === 'warning'; });
+  var panelBg = allOk ? 'var(--green-bg)' : (hasWarn ? 'var(--gold-bg)' : '#EEF1F8');
+  var panelBorder = allOk ? '#BFE0CC' : (hasWarn ? '#EAD2A6' : '#CBD7EC');
+  var html = '<div style="background:'+panelBg+';border:1px solid '+panelBorder+';border-radius:12px;padding:14px 18px;margin-bottom:18px;">';
+  html += '<div style="font-weight:700;font-size:13px;color:var(--navy-deep);margin-bottom:10px;">';
+  html += '📐 <span class="i18n-vn">Kiểm tra định dạng file (.docx)</span><span class="i18n-en">File Format Check (.docx)</span></div>';
+  fmtIssues.forEach(function(f, fi){
+    var icon = f.severity === 'ok' ? '✅' : (f.severity === 'warning' ? '⚠️' : 'ℹ️');
+    var textColor = f.severity === 'ok' ? 'var(--green)' : (f.severity === 'warning' ? 'var(--gold)' : 'var(--slate)');
+    var isLast = fi === fmtIssues.length - 1;
+    html += '<div style="margin-bottom:'+(isLast?'0':'8px')+';padding-bottom:'+(isLast?'0':'8px')+';border-bottom:'+(isLast?'none':'1px dashed rgba(0,0,0,0.08)')+'">';
+    html += '<div style="font-size:13px;color:'+textColor+';font-weight:600;">'+icon+' '+esc(f.issue_vn)+'</div>';
+    if(f.suggestion_vn && f.severity !== 'ok'){
+      html += '<div style="font-size:12px;color:var(--muted);margin-top:3px;">→ '+esc(f.suggestion_vn)+'</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
 function renderCheckerResults(){
   var issues = state.checker.issues || [];
   var filter = state.checker.filter || 'all';
   var counts = checkerSummary();
   var total = issues.length;
 
-  var html = '<div class="an-summary" style="margin-top:18px;">';
+  var html = '';
+
+  /* ── Format check panel (only for docx files) ── */
+  html += renderFormatPanel();
+
+  html += '<div class="an-summary" style="margin-top:18px;">';
   html += '<div style="font-size:13px;color:var(--muted);margin-bottom:12px;">';
   html += '<span class="i18n-en">Found <b>'+total+'</b> potential issues.</span>';
   html += '<span class="i18n-vn">Phát hiện <b>'+total+'</b> vấn đề tiềm ẩn.</span></div>';
@@ -2687,16 +2725,285 @@ function readCheckerFile(file){
 }
 
 /* ======================================================================
+   DOCX FORMAT CHECKER — line spacing & font (reads raw XML via JSZip)
+   Checks:
+     - Line spacing: should be 1.15 (276 twips in w:line with w:lineRule="auto")
+     - Font: body text should use Arial, size 11pt (22 half-pts)
+   Returns a promise that resolves to an array of format issue objects.
+   ====================================================================== */
+function checkDocxFormat(file){
+  /* We read the docx as a zip and parse word/document.xml + word/styles.xml */
+  return new Promise(function(resolve){
+    var issues = [];
+    /* Try to load JSZip dynamically if not present */
+    function doCheck(buf){
+      try{
+        var uint8 = new Uint8Array(buf);
+        /* Mini ZIP reader — find and extract specific files */
+        function findZipFiles(bytes){
+          /* Locate each local file header (PK\x03\x04) */
+          var files = {};
+          var i = 0;
+          while(i < bytes.length - 30){
+            if(bytes[i]===0x50&&bytes[i+1]===0x4B&&bytes[i+2]===0x03&&bytes[i+3]===0x04){
+              var fnLen = bytes[i+26]|(bytes[i+27]<<8);
+              var extraLen = bytes[i+28]|(bytes[i+29]<<8);
+              var compSize = bytes[i+18]|(bytes[i+19]<<8)|(bytes[i+20]<<16)|(bytes[i+21]<<24);
+              var fnStart = i+30;
+              var fname = '';
+              for(var fi=0;fi<fnLen;fi++) fname += String.fromCharCode(bytes[fnStart+fi]);
+              var dataStart = fnStart + fnLen + extraLen;
+              var method = bytes[i+8]|(bytes[i+9]<<8);
+              files[fname] = {start:dataStart, size:compSize, method:method};
+              i = dataStart + compSize;
+            } else { i++; }
+          }
+          return files;
+        }
+
+        function decompressStored(bytes, start, size){
+          var slice = bytes.subarray(start, start+size);
+          var out='';
+          for(var ci=0;ci<slice.length;ci++) out+=String.fromCharCode(slice[ci]);
+          return out;
+        }
+
+        /* inflate via DecompressionStream (supported Chrome/Edge/Firefox) */
+        function decompressDeflate(bytes, start, size){
+          var slice = bytes.subarray(start, start+size);
+          if(typeof DecompressionStream !== 'undefined'){
+            var ds = new DecompressionStream('deflate-raw');
+            var writer = ds.writable.getWriter();
+            var reader = ds.readable.getReader();
+            writer.write(slice);
+            writer.close();
+            var chunks = [];
+            function read(){
+              return reader.read().then(function(r){
+                if(!r.done){ chunks.push(r.value); return read(); }
+                var total = chunks.reduce(function(a,c){return a+c.length;},0);
+                var out = new Uint8Array(total);
+                var off = 0;
+                chunks.forEach(function(c){out.set(c,off);off+=c.length;});
+                return new TextDecoder('utf-8').decode(out);
+              });
+            }
+            return read();
+          }
+          return Promise.resolve(null); /* can't decompress */
+        }
+
+        var zipFiles = findZipFiles(uint8);
+        var targets = ['word/document.xml','word/styles.xml'];
+        var xmlMap = {};
+
+        function loadNext(idx){
+          if(idx >= targets.length) return analyseXml();
+          var fname = targets[idx];
+          var entry = zipFiles[fname];
+          if(!entry){ return loadNext(idx+1); }
+          var p;
+          if(entry.method === 0){
+            /* stored — no compression */
+            xmlMap[fname] = decompressStored(uint8, entry.start, entry.size);
+            return loadNext(idx+1);
+          } else if(entry.method === 8){
+            p = decompressDeflate(uint8, entry.start, entry.size);
+          } else {
+            return loadNext(idx+1);
+          }
+          return p.then(function(xml){
+            if(xml) xmlMap[fname] = xml;
+            return loadNext(idx+1);
+          });
+        }
+
+        function analyseXml(){
+          /* ── 1. Check line spacing in document.xml ── */
+          var docXml = xmlMap['word/document.xml'] || '';
+          var stylesXml = xmlMap['word/styles.xml'] || '';
+          var TARGET_LINE = 276;        /* 1.15 × 240 = 276 twips */
+          var LINE_TOLERANCE = 20;      /* ±20 twips allowed */
+          var TARGET_SIZE = 22;         /* 11pt = 22 half-pts */
+          var SIZE_TOLERANCE = 2;       /* ±1pt */
+
+          /* --- Line spacing check ---
+             In OOXML, line spacing is stored in <w:spacing w:line="N" w:lineRule="auto"/>.
+             We extract all unique line values from paragraph spacing and check. */
+          var lineVals = {};
+          var spacingRe = /w:line="(\d+)"[^/]*w:lineRule="auto"/g;
+          var sm;
+          while((sm = spacingRe.exec(docXml)) !== null){
+            lineVals[parseInt(sm[1],10)] = true;
+          }
+          /* Also check styles.xml for default paragraph spacing */
+          var sm2;
+          var spacingRe2 = /w:line="(\d+)"[^/]*w:lineRule="auto"/g;
+          while((sm2 = spacingRe2.exec(stylesXml)) !== null){
+            lineVals[parseInt(sm2[1],10)] = true;
+          }
+          var lineKeys = Object.keys(lineVals).map(Number);
+          var hasLineInfo = lineKeys.length > 0;
+          if(hasLineInfo){
+            var badLines = lineKeys.filter(function(v){
+              return Math.abs(v - TARGET_LINE) > LINE_TOLERANCE;
+            });
+            if(badLines.length > 0){
+              var badLineDescriptions = badLines.map(function(v){
+                return (v/240).toFixed(2) + 'x (' + v + ' twips)';
+              }).join(', ');
+              issues.push({
+                type:'format', severity:'warning',
+                sentence:'[Kiểm tra định dạng — Line Spacing]',
+                issue_vn:'Giãn dòng không đúng chuẩn: phát hiện giá trị ' + badLineDescriptions + '. Yêu cầu: 1.15 (276 twips).',
+                suggestion_vn:'Chọn toàn bộ văn bản (Ctrl+A), vào Format → Paragraph → Line Spacing, đặt về "Multiple" = 1.15.',
+                excerpt:'[line-spacing: ' + badLines.map(function(v){return (v/240).toFixed(2)+'x';}).join(', ') + ']'
+              });
+            } else {
+              issues.push({
+                type:'format', severity:'ok',
+                sentence:'[Kiểm tra định dạng — Line Spacing]',
+                issue_vn:'✓ Giãn dòng hợp lệ (1.15).',
+                suggestion_vn:'',
+                excerpt:'[line-spacing: ok]'
+              });
+            }
+          } else {
+            issues.push({
+              type:'format', severity:'info',
+              sentence:'[Kiểm tra định dạng — Line Spacing]',
+              issue_vn:'Không tìm thấy thông tin giãn dòng trong file. Có thể file dùng giãn dòng mặc định (thường là 1.0). Yêu cầu: 1.15.',
+              suggestion_vn:'Kiểm tra thủ công: Chọn toàn bộ văn bản, vào Format → Paragraph → Line Spacing và đặt về 1.15.',
+              excerpt:'[line-spacing: not found]'
+            });
+          }
+
+          /* --- Font check ---
+             In OOXML, font is in <w:rFonts w:ascii="Arial" ...> and size in <w:sz w:val="22">.
+             We check the default/Normal style and look for non-Arial fonts in the document. */
+
+          /* Check default style in styles.xml */
+          var defaultStyle = '';
+          var defaultStyleMatch = stylesXml.match(/<w:style[^>]*w:type="paragraph"[^>]*w:default="1"[^>]*>([\s\S]*?)<\/w:style>/);
+          if(!defaultStyleMatch) defaultStyleMatch = stylesXml.match(/<w:style[^>]*w:styleId="Normal"[^>]*>([\s\S]*?)<\/w:style>/);
+          if(defaultStyleMatch) defaultStyle = defaultStyleMatch[1];
+
+          /* Extract all font names referenced in the document body */
+          var fontNames = {};
+          var fontRe = /w:ascii="([^"]+)"/g;
+          var fm;
+          while((fm = fontRe.exec(docXml)) !== null){
+            var fn = fm[1];
+            /* Skip theme fonts and generic names */
+            if(fn && fn.indexOf('Theme') === -1 && fn !== 'Times New Roman' + '' ) {
+              fontNames[fn] = (fontNames[fn]||0) + 1;
+            }
+          }
+          /* Also check styles.xml */
+          var fontRe2 = /w:ascii="([^"]+)"/g;
+          while((fm = fontRe2.exec(stylesXml)) !== null){
+            var fn2 = fm[1];
+            if(fn2 && fn2.indexOf('Theme') === -1){
+              fontNames[fn2] = (fontNames[fn2]||0) + 1;
+            }
+          }
+
+          var fontKeys = Object.keys(fontNames);
+          var hasFontInfo = fontKeys.length > 0;
+          if(hasFontInfo){
+            var nonArial = fontKeys.filter(function(f){
+              return f.toLowerCase().indexOf('arial') === -1;
+            });
+            var arialCount = (fontNames['Arial']||0) + (fontNames['arial']||0);
+            if(nonArial.length > 0 && arialCount === 0){
+              issues.push({
+                type:'format', severity:'warning',
+                sentence:'[Kiểm tra định dạng — Font]',
+                issue_vn:'Font chữ không đúng chuẩn. Phát hiện: ' + nonArial.slice(0,4).join(', ') + '. Yêu cầu: Arial 11pt.',
+                suggestion_vn:'Chọn toàn bộ văn bản (Ctrl+A), đổi font về Arial, cỡ chữ 11.',
+                excerpt:'[font: ' + nonArial.slice(0,3).join(', ') + ']'
+              });
+            } else if(nonArial.length > 0){
+              issues.push({
+                type:'format', severity:'info',
+                sentence:'[Kiểm tra định dạng — Font]',
+                issue_vn:'Tài liệu có sử dụng cả Arial và một số font khác: ' + nonArial.slice(0,4).join(', ') + '. Đề nghị dùng Arial 11 xuyên suốt.',
+                suggestion_vn:'Kiểm tra các đoạn dùng font khác Arial và đổi về Arial 11.',
+                excerpt:'[font: mixed — ' + nonArial.slice(0,2).join(', ') + ']'
+              });
+            } else {
+              /* Arial confirmed — check size */
+              var sizeVals = {};
+              var szRe = /w:sz\s+w:val="(\d+)"/g;
+              var szm;
+              while((szm = szRe.exec(docXml)) !== null) sizeVals[parseInt(szm[1],10)] = true;
+              var szRe2 = /w:sz\s+w:val="(\d+)"/g;
+              while((szm = szRe2.exec(stylesXml)) !== null) sizeVals[parseInt(szm[1],10)] = true;
+              var szKeys = Object.keys(sizeVals).map(Number);
+              var badSizes = szKeys.filter(function(v){
+                return Math.abs(v - TARGET_SIZE) > SIZE_TOLERANCE && v > 0;
+              });
+              /* Ignore heading sizes (anything >= 28 half-pts = 14pt) */
+              badSizes = badSizes.filter(function(v){ return v < 28; });
+              if(badSizes.length > 0){
+                issues.push({
+                  type:'format', severity:'warning',
+                  sentence:'[Kiểm tra định dạng — Font Size]',
+                  issue_vn:'Font Arial nhưng cỡ chữ thân bài không đúng: phát hiện ' + badSizes.map(function(v){return (v/2)+'pt';}).join(', ') + '. Yêu cầu: 11pt (22 half-pts).',
+                  suggestion_vn:'Chọn toàn bộ văn bản thân bài, đổi cỡ chữ về 11.',
+                  excerpt:'[font-size: ' + badSizes.map(function(v){return (v/2)+'pt';}).join(', ') + ']'
+                });
+              } else {
+                issues.push({
+                  type:'format', severity:'ok',
+                  sentence:'[Kiểm tra định dạng — Font]',
+                  issue_vn:'✓ Font Arial 11pt đúng chuẩn.',
+                  suggestion_vn:'',
+                  excerpt:'[font: Arial 11pt — ok]'
+                });
+              }
+            }
+          } else {
+            issues.push({
+              type:'format', severity:'info',
+              sentence:'[Kiểm tra định dạng — Font]',
+              issue_vn:'Không đọc được thông tin font trong file. Vui lòng kiểm tra thủ công: toàn bộ văn bản nên dùng Arial 11.',
+              suggestion_vn:'Chọn toàn bộ văn bản (Ctrl+A) và kiểm tra font + cỡ chữ trong Word/Google Docs.',
+              excerpt:'[font: not found]'
+            });
+          }
+
+          resolve(issues);
+        }
+
+        loadNext(0).then(function(){}).catch(function(){ resolve(issues); });
+      } catch(e){
+        resolve(issues);
+      }
+    }
+
+    file.arrayBuffer().then(function(buf){ doCheck(buf); }).catch(function(){ resolve(issues); });
+  });
+}
+
+/* ======================================================================
    EVENT BINDING
    ====================================================================== */
 function bindCheckerFileChosen(file){
   showToast('Đang đọc file… · Reading file…');
-  readCheckerFile(file).then(function(text){
+  var isDocx = (file.name||'').toLowerCase().endsWith('.docx');
+  var readPromise = readCheckerFile(file);
+  var fmtPromise = isDocx ? checkDocxFormat(file) : Promise.resolve([]);
+
+  Promise.all([readPromise, fmtPromise]).then(function(results){
+    var text = results[0];
+    var fmtIssues = results[1] || [];
     if(!text||text.trim().length<20){
       showToast('Không đọc được nội dung · Could not read content');
       return;
     }
     state.checker.doc={name:file.name,text:text,chars:text.length,importedAt:new Date().toISOString()};
+    state.checker.fmtIssues = fmtIssues; /* store format issues separately */
     state.checker.issues=[];
     state.checker.ran=false;
     renderAll();
@@ -2941,17 +3248,19 @@ function fetchLanguageToolIssues(text){
 
 /* ======================================================================
    COMPREHENSIVE SM EVIDENCE CODE CHECKER
-   Valid format: [SMX.Y.Z]  where X=1-5, Y=1-4, Z=1-100
-   Also accepts: [SM.X.Y.Z] (with dot after SM)
+   Valid format: [SM X.Y.Z]  where X=1-5, Y=1-5, Z=1-100
+   Example: [SM 1.2.5]
    
    Detects:
-   1. Missing brackets  : SM1.2.6   → [SM1.2.6]
-   2. Missing "M"       : [S1.2.6]  → [SM1.2.6]
-   3. Missing dot after SM: [SM1.2.6] → [SM.1.2.6]  (both accepted, note preferred)
-   4. X out of range 1-5
-   5. Y out of range 1-4
-   6. Z out of range 1-100
-   7. Wrong segment count (need exactly 3 segments after SM)
+   1. Missing brackets      : SM 1.2.6        → [SM 1.2.6]
+   2. Missing "M"           : [S 1.2.6]       → [SM 1.2.6]
+   3. Extra spaces inside   : [ SM 1.2.6 ]    → [SM 1.2.6]
+   4. Missing space after SM: [SM1.2.6]       → [SM 1.2.6]
+   5. Extra spaces in nums  : [SM 1. 2 .6]    → [SM 1.2.6]
+   6. X out of range 1-5
+   7. Y out of range 1-5
+   8. Z out of range 1-100
+   9. Wrong segment count (need exactly 3 segments X.Y.Z)
    ====================================================================== */
 function checkAllEvidenceCodes(text){
   var issues = [];
@@ -2970,45 +3279,100 @@ function checkAllEvidenceCodes(text){
     });
   }
 
-  /* ── Scan for ALL SM-like patterns ──
-     Captures optional [, optional S or SM prefix (with optional dot after SM),
-     then the numeric portion (digits + dots), then optional ]
+  /* ── Pass A: Detect whitespace-mangled SM codes ──
+     Catches patterns like "[ SM 1 . 2 . 5 ]", "[ SM1.2.5]", "[SM  1.2.5]", etc.
+     Strategy: find any bracket-enclosed string that contains S/SM and digits with dots.
+  */
+  var wsPattern = /\[\s*S\s*M?\s*[\d\s.]+\]/gi;
+  var wsMatch;
+  while ((wsMatch = wsPattern.exec(text)) !== null) {
+    var rawFull = wsMatch[0];
+    /* Collapse all internal whitespace to normalise */
+    var collapsed = rawFull.replace(/\s+/g, '');
+    /* Check if it already matches the canonical form [SMX.Y.Z] */
+    if (/^\[SM\d+\.\d+\.\d+\]$/.test(collapsed)) continue; /* valid — handled by pass B */
+
+    /* Strip brackets and SM prefix to get the numeric part */
+    var innerWs = collapsed.replace(/^\[S?M?/, '').replace(/\]$/, '');
+    var segsWs = innerWs.split('.').filter(function(s){ return s.length > 0; });
+    var errorsWs = [];
+
+    /* Detect extra whitespace */
+    var hasExtraSpaces = /\s/.test(rawFull.slice(1, rawFull.length - 1)); /* inside brackets */
+    if (hasExtraSpaces) errorsWs.push('có khoảng trắng thừa bên trong mã (giữa các ký tự hoặc chữ số)');
+
+    /* Missing space between SM and numbers is now flagged in Pass B below */
+    /* Build suggestion */
+    var sugWs = '';
+    if (segsWs.length === 3) {
+      var wX = Math.min(5, Math.max(1, parseInt(segsWs[0],10)||1));
+      var wY = Math.min(5, Math.max(1, parseInt(segsWs[1],10)||1));
+      var wZ = Math.min(100, Math.max(1, parseInt(segsWs[2],10)||1));
+      sugWs = '[SM ' + wX + '.' + wY + '.' + wZ + ']';
+    } else {
+      sugWs = '[SM X.Y.Z] — ví dụ: [SM 1.2.5]';
+    }
+    if (errorsWs.length > 0) {
+      addIssue(rawFull,
+        'Mã minh chứng "' + rawFull + '" có lỗi: ' + errorsWs.join('; ') + '. Cấu trúc chuẩn: [SM X.Y.Z] với X∈[1-5], Y∈[1-5], Z∈[1-100]. Ví dụ: [SM 1.2.5].',
+        'Sửa thành "' + sugWs + '" và gắn hyperlink dẫn đến tài liệu minh chứng.',
+        rawFull);
+    }
+  }
+  wsPattern.lastIndex = 0;
+
+  /* ── Pass B: Scan for ALL SM-like patterns (no brackets or partial) ──
+     Captures optional [, optional S or SM prefix (with optional space & dot after SM),
+     then the numeric portion (digits + dots + optional spaces), then optional ]
      
-     We cast a wide net to catch all malformed variants, then validate each. */
-  /* Pattern breakdown:
+     We cast a wide net to catch all malformed variants, then validate each.
+
+     Pattern breakdown:
        (\[?)          → optional opening bracket
+       \s*            → optional leading space inside bracket
        (S(?:M)?)      → "S" or "SM"
-       (\.?)          → optional dot after SM/S
-       (\d[\d\.]*)    → numeric part: starts with digit, may contain more digits and dots
+       ([\s.]?)       → optional space or dot after SM/S (both forms accepted)
+       ([\d][\d\s.]*) → numeric part: starts with digit, may contain digits, spaces, dots
+       \s*            → optional trailing space inside bracket
        (\]?)          → optional closing bracket
   */
-  var smPattern = /(\[?)(S(?:M)?)(\.?)(\d[\d\.]*)(\]?)/g;
+  var smPattern = /(\[?\s*)(S(?:M)?)([\s.]?)([\d][\d\s.]*)(\s*\]?)/g;
   var match;
 
   while ((match = smPattern.exec(text)) !== null) {
     var fullMatch   = match[0];
-    var bracketL    = match[1];   // '[' or ''
+    var bracketPart = match[1];   // '[' possibly with spaces, or ''
     var prefix      = match[2];   // 'S' or 'SM'
-    var dotAfterSM  = match[3];   // '.' or ''
-    var numPart     = match[4];   // raw numeric string e.g. '1.2.6', '1.34', '12.3'
-    var bracketR    = match[5];   // ']' or ''
+    var sepAfterSM  = match[3];   // space, '.', or ''
+    var numPartRaw  = match[4];   // raw numeric string, may have spaces
+    var closePart   = match[5];   // spaces + ']' or ''
+
+    var bracketL = bracketPart.indexOf('[') !== -1;
+    var bracketR = closePart.indexOf(']') !== -1;
+
+    /* Normalise numPart: remove all spaces */
+    var numPart = numPartRaw.replace(/\s+/g, '');
 
     /* Skip obvious non-code matches: standalone numbers like "1.2", "3.14", etc.
        We require the prefix S or SM to be present — already guaranteed by pattern.
        But skip if the match is just 'S' followed by a plain number with no dots
        that looks like a sentence start (e.g. "Section 1"). */
-    if(prefix === 'S' && dotAfterSM === '' && numPart.indexOf('.') === -1) continue;
+    if(prefix === 'S' && sepAfterSM !== ' ' && sepAfterSM !== '.' && numPart.indexOf('.') === -1) continue;
 
     /* Skip if the full match is embedded in a word (e.g. "ECTS", "SDGs") —
-       check character before '[' or 'S' */
+       check character before the match */
     var charBefore = match.index > 0 ? text[match.index - 1] : ' ';
     if(/[A-Za-z]/.test(charBefore)) continue;
 
-    var hasBracketL = bracketL === '[';
-    var hasBracketR = bracketR === ']';
+    /* Skip if already caught and reported by Pass A (bracket + whitespace) */
+    if (bracketL && bracketR && /\s/.test(fullMatch.slice(1, fullMatch.length - 1))) {
+      /* Already handled above — but only if it has extra whitespace inside */
+      var collapsedB = fullMatch.replace(/\s+/g,'');
+      if (!/^\[SM\d+\.\d+\.\d+\]$/.test(collapsedB)) continue;
+    }
+
     var isMissingM  = (prefix === 'S');
 
-    /* Parse numeric segments */
     /* Remove trailing dots from numPart if any */
     var cleanNum = numPart.replace(/\.+$/, '');
     var segments = cleanNum.split('.');
@@ -3022,20 +3386,32 @@ function checkAllEvidenceCodes(text){
     if (isMissingM) {
       errors.push('thiếu chữ "M" (phải là "SM", không phải "S")');
     }
-    if (!hasBracketL && !hasBracketR) {
+    if (!bracketL && !bracketR) {
       errors.push('thiếu dấu ngoặc vuông [ ] bao quanh mã');
-    } else if (!hasBracketL) {
+    } else if (!bracketL) {
       errors.push('thiếu dấu "[" phía trước');
-    } else if (!hasBracketR) {
+    } else if (!bracketR) {
       errors.push('thiếu dấu "]" phía sau');
+    }
+
+    /* ── Check for missing space between SM and numeric part ── */
+    if (bracketL && bracketR && sepAfterSM !== ' ' && sepAfterSM !== '') {
+      /* dot after SM is also fine as separator — skip */
+    } else if (bracketL && bracketR && sepAfterSM === '') {
+      errors.push('thiếu khoảng trắng giữa "SM" và số (chuẩn: [SM X.Y.Z])');
+    }
+
+    /* ── Extra spaces inside numeric part ── */
+    if (/\s/.test(numPartRaw)) {
+      errors.push('có khoảng trắng thừa bên trong phần số (ví dụ "1. 2 .5" → "1.2.5")');
     }
 
     /* ── Segment count check: must have exactly 3 segments X.Y.Z ── */
     if (segments.length !== 3) {
       if (segments.length < 3) {
-        errors.push('thiếu phân đoạn số — mã phải có đúng 3 phần: SMX.Y.Z (ví dụ: SM1.2.6)');
+        errors.push('thiếu phân đoạn số — mã phải có đúng 3 phần: SM X.Y.Z (ví dụ: SM 1.2.6)');
       } else {
-        errors.push('quá nhiều phân đoạn — mã phải có đúng 3 phần: SMX.Y.Z (tối đa: SM1.4.100)');
+        errors.push('quá nhiều phân đoạn — mã phải có đúng 3 phần: SM X.Y.Z (tối đa: SM 1.5.100)');
       }
     } else {
       /* ── Range validation (only when we have exactly 3 segments) ── */
@@ -3061,23 +3437,23 @@ function checkAllEvidenceCodes(text){
 
     /* ── Build correct form suggestion ── */
     var suggestedNum = cleanNum; /* default: keep as-is */
-    if (segments.length === 3 && errors.length > 0) {
+    if (segments.length === 3) {
       /* Best-effort correction: clamp values to valid range */
       var sX = Math.min(5, Math.max(1, parseInt(segments[0],10)||1));
       var sY = Math.min(5, Math.max(1, parseInt(segments[1],10)||1));
       var sZ = Math.min(100, Math.max(1, parseInt(segments[2],10)||1));
       suggestedNum = sX + '.' + sY + '.' + sZ;
     }
-    var correctForm = '[SM' + suggestedNum + ']';
+    var correctForm = '[SM ' + suggestedNum + ']';
 
     /* ── Only report if there are errors ── */
     if (errors.length > 0) {
       addIssue(
-        fullMatch,
-        'Mã minh chứng "' + fullMatch + '" có lỗi: ' + errors.join('; ') +
-          '. Cấu trúc chuẩn: [SMX.Y.Z] với X∈[1-5], Y∈[1-5], Z∈[1-100].',
+        fullMatch.trim(),
+        'Mã minh chứng "' + fullMatch.trim() + '" có lỗi: ' + errors.join('; ') +
+          '. Cấu trúc chuẩn: [SM X.Y.Z] với X∈[1-5], Y∈[1-5], Z∈[1-100]. Ví dụ: [SM 1.2.5].',
         'Sửa thành "' + correctForm + '" và gắn hyperlink dẫn đến tài liệu minh chứng.',
-        fullMatch
+        fullMatch.trim()
       );
     }
   }
